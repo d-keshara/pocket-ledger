@@ -44,7 +44,9 @@
 }
 
 * { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; overscroll-behavior: none; } /* stop the whole app rubber-banding on iPhone; content still scrolls */
+html, body { height: 100%; margin: 0; overscroll-behavior: none; touch-action: pan-x pan-y; }
+/* touch-action: allow scrolling only, so no pinch-zoom and no double-tap zoom */
+.phone-only { display: none; } /* stop the whole app rubber-banding on iPhone; content still scrolls */
 body {
   background: var(--bg); color: var(--ink);
   font: 14px/1.5 var(--body);
@@ -420,6 +422,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .input { font-size: 16px; }
 
   .about-credit { margin-left: 0; text-align: left; flex-basis: 100%; }
+
+  /* Reports period picker: 6 options in a 3 x 2 grid instead of one row wider than the screen */
+  .head .seg { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
+  .head .seg button { padding: 7px 4px; }
+
+  /* Scheduled table: drop the Category and Repeats columns; "repeats" moves under the name */
+  .rec-table th:nth-child(2), .rec-table td:nth-child(2),
+  .rec-table th:nth-child(3), .rec-table td:nth-child(3) { display: none; }
+  .phone-only { display: inline; }
+  .rec-table th, .rec-table td { padding: 10px 3px; white-space: nowrap; }
+  .rec-table td:first-child { white-space: normal; width: 100%; }  /* the name takes the spare width */
+  .rec-table .icon-btn { padding: 5px; }
 }
 
 /* Exercise 1: touch screens can't hover, so always show edit/delete */
