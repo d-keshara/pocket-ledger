@@ -197,19 +197,50 @@ function weekInfo(refIso = today()) {
 }
 
 /* ================= tooltip ================= */
+/* Mouse: show while hovering, follow the cursor.
+   Touch: fingers can't hover, so show on tap above the tapped item, and hide after
+   a moment, on scroll, on a tap elsewhere, or when the page changes. */
+const TIP_TOUCH_MS = 2500;
 const tip = () => $('#tip');
-document.addEventListener('mousemove', (e) => {
-  const el = e.target.closest?.('[data-tip]');
+let tipTimer = null;
+let lastPointer = 'mouse';
+function hideTip() {
+  clearTimeout(tipTimer);
+  tip()?.classList.remove('show');
+}
+function showTip(el, place) {
   const t = tip(); if (!t) return;
-  if (!el) { t.classList.remove('show'); return; }
   t.innerHTML = el.getAttribute('data-tip');
   t.classList.add('show');
   const w = t.offsetWidth, h = t.offsetHeight;
-  let x = e.clientX + 14, y = e.clientY - h - 10;
-  if (x + w > innerWidth - 8) x = e.clientX - w - 14;
-  if (y < 8) y = e.clientY + 16;
+  let x, y;
+  if (place.mouseX !== undefined) {           // next to the cursor
+    x = place.mouseX + 14; y = place.mouseY - h - 10;
+    if (x + w > innerWidth - 8) x = place.mouseX - w - 14;
+    if (y < 8) y = place.mouseY + 16;
+  } else {                                     // centred above the tapped item
+    const r = el.getBoundingClientRect();
+    x = clamp(r.left + r.width / 2 - w / 2, 8, Math.max(8, innerWidth - w - 8));
+    y = r.top - h - 8;
+    if (y < 8) y = r.bottom + 8;
+  }
   t.style.left = x + 'px'; t.style.top = y + 'px';
+}
+document.addEventListener('pointerdown', (e) => { lastPointer = e.pointerType || 'mouse'; }, true);
+document.addEventListener('pointermove', (e) => {
+  if (e.pointerType && e.pointerType !== 'mouse') return; // ignore fingers and pens moving
+  const el = e.target.closest?.('[data-tip]');
+  if (el) showTip(el, { mouseX: e.clientX, mouseY: e.clientY }); else hideTip();
 });
+document.addEventListener('click', (e) => {
+  if (lastPointer === 'mouse') return;
+  const el = e.target.closest?.('[data-tip]');
+  if (!el) { hideTip(); return; }
+  showTip(el, {});
+  clearTimeout(tipTimer);
+  tipTimer = setTimeout(hideTip, TIP_TOUCH_MS);
+});
+document.addEventListener('scroll', hideTip, true); // `true` also catches scrolling inside .main
 
 /* ================= toast ================= */
 function toast(msg, action) {
@@ -1023,6 +1054,7 @@ function logo(size = 30) {
 /* ================= render & bindings ================= */
 function render() {
   applyTheme();
+  hideTip(); // a tip from the previous page must not stay on screen
   const root = $('#root');
   if (!state.settings.onboarded) { root.innerHTML = viewWelcome(); bindWelcome(); return; }
   const views = { dashboard: viewDashboard, transactions: viewTransactions, budgets: viewBudgets, goals: viewGoals, recurring: viewRecurring, reports: viewReports, accounts: viewAccounts, settings: viewSettings };
@@ -1163,7 +1195,7 @@ if (window.__LEDGER_TEST__) {
     defaultState, migrate, render, money, esc, addDays, addMonths, daysBetween, weekStartOf, toISO, parseISO,
     weekInfo, accountBalance, totalBalance, postDueRecurring, nextOccurrence, budgetStatus, filteredTx,
     periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner,
-    backupDue, saveBackup, snoozeBackup, lastBackupText,
+    backupDue, saveBackup, snoozeBackup, lastBackupText, hideTip, TIP_TOUCH_MS,
   };
 } else {
   let booted = false;
