@@ -340,6 +340,12 @@ describe('update banner', () => {
     assert.match(doc.querySelector('.update-banner').textContent, /new version/);
   });
 
-  // ✏️ EXERCISE: write this test yourself (see the lesson). Remove `.todo` when you start.
-  test.todo('"Not now" button closes the banner');
+  test('"Not now" button closes the banner', (t) => {
+    const { L, doc, close } = makeApp(); t.after(close);   // Arrange: start a fake app
+
+    L.showUpdateBanner();                                   // Act: show the banner...
+    doc.querySelector('#updLater').click();                 //      ...and click "Not now"
+
+    assert.equal(doc.querySelector('.update-banner'), null);  // Assert: it should be gone
+  });
 });
