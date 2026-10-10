@@ -3,6 +3,8 @@
 'use strict';
 
 /* ================= constants ================= */
+const APP_VERSION = '1.1.0';
+const AUTHOR = 'D. Kezara';
 const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948', '#5f6b66', '#0f6b5c'];
 const CURRENCIES = [
   ['LKR', 'Rs'], ['USD', '$'], ['EUR', '€'], ['GBP', '£'], ['INR', '₹'], ['AUD', 'A$'], ['CAD', 'C$'],
@@ -40,7 +42,7 @@ const icon = (n) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" 
 /* ================= utilities ================= */
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const round2 = (n) => Math.round((+n || 0) * 100) / 100;
+const round2 = (n) => Math.round((+n || 0) * 100) / 100 || 0; // `|| 0` turns -0 into 0
 const sum = (arr, f = (x) => x) => arr.reduce((a, x) => a + f(x), 0);
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -50,7 +52,8 @@ const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
 const pad = (n) => String(n).padStart(2, '0');
 const toISO = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const parseISO = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
-const today = () => toISO(new Date());
+const now = () => (window.__LEDGER_NOW__ ? new Date(window.__LEDGER_NOW__) : new Date());
+const today = () => toISO(now());
 const addDays = (iso, n) => { const d = parseISO(iso); d.setDate(d.getDate() + n); return toISO(d); };
 const addMonths = (iso, n, anchorDay) => {
   const d = parseISO(iso); const day = anchorDay || d.getDate();
@@ -65,7 +68,7 @@ const weekStartOf = (iso) => { const d = parseISO(iso); const diff = (d.getDay()
 const fmtDate = (iso, opts = {}) => {
   const d = parseISO(iso); const t = today();
   if (!opts.full) { if (iso === t) return 'Today'; if (iso === addDays(t, -1)) return 'Yesterday'; if (iso === addDays(t, 1)) return 'Tomorrow'; }
-  const sameYear = d.getFullYear() === new Date().getFullYear();
+  const sameYear = d.getFullYear() === now().getFullYear();
   return `${opts.noDay ? '' : DAY_SHORT[d.getDay()] + ', '}${d.getDate()} ${MONTH_SHORT[d.getMonth()]}${sameYear ? '' : ' ' + d.getFullYear()}`;
 };
 
@@ -365,7 +368,8 @@ function txForm(existing = {}) {
     if (existing.recurringId) rec.recurringId = existing.recurringId;
     if (isEdit) {
       const cur = state.transactions.find((t) => t.id === existing.id);
-      goalEffect(cur, -1); Object.assign(cur, rec); goalEffect(cur, 1);
+      // Replace every field, so switching type (e.g. transfer -> expense) leaves no stale toAccountId/categoryId behind.
+      goalEffect(cur, -1); for (const k of Object.keys(cur)) delete cur[k]; Object.assign(cur, rec); goalEffect(cur, 1);
     } else state.transactions.push(rec);
     save();
     if (again) {
@@ -457,7 +461,7 @@ const NAV = [
 ];
 
 function greeting() {
-  const h = new Date().getHours();
+  const h = now().getHours();
   const part = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
   return state.settings.name ? `${part}, ${state.settings.name}` : part;
 }
@@ -522,8 +526,8 @@ function viewDashboard() {
     ${alertHtml}
     <div class="stats">
       <div class="stat"><div class="k">Total balance</div><div class="v">${money(totalBalance())}</div><div class="d">${state.accounts.length} account${state.accounts.length === 1 ? '' : 's'}</div></div>
-      <div class="stat"><div class="k">Income in ${MONTH_SHORT[new Date().getMonth()]}</div><div class="v pos">${money(mInc)}</div><div class="d">${plural(incomeIn(mFrom, mTo).length, 'payment')}</div></div>
-      <div class="stat"><div class="k">Spent in ${MONTH_SHORT[new Date().getMonth()]}</div><div class="v">${money(mExp)}</div><div class="d">${money(mExp / Math.max(1, parseISO(t).getDate()), { short: true })} a day on average</div></div>
+      <div class="stat"><div class="k">Income in ${MONTH_SHORT[now().getMonth()]}</div><div class="v pos">${money(mInc)}</div><div class="d">${plural(incomeIn(mFrom, mTo).length, 'payment')}</div></div>
+      <div class="stat"><div class="k">Spent in ${MONTH_SHORT[now().getMonth()]}</div><div class="v">${money(mExp)}</div><div class="d">${money(mExp / Math.max(1, parseISO(t).getDate()), { short: true })} a day on average</div></div>
       <div class="stat"><div class="k">Kept this month</div><div class="v ${saved < 0 ? 'neg' : ''}">${money(saved)}</div><div class="d">${mInc ? Math.round(saved / mInc * 100) + '% of income' : 'Add income to see your savings rate'}</div></div>
     </div>
     <div class="cols">
@@ -883,7 +887,7 @@ function viewSettings() {
     return `<div class="list-row"><i class="dot" style="background:${c.color}"></i><span class="grow">${esc(c.name)} ${type === 'expense' && c.weekly === false ? '<span class="tag">Not in weekly limit</span>' : ''}</span><span class="muted" style="font-size:12.5px">${used} used</span>
     <button class="icon-btn" data-cat-edit="${c.id}" aria-label="Edit">${icon('edit')}</button><button class="icon-btn" data-cat-del="${c.id}" aria-label="Delete">${icon('trash')}</button></div>`;
   }).join('');
-  return `<div class="head"><div><h1>Settings</h1><p>Make it yours. Everything is stored only on this computer.</p></div></div>
+  return `<div class="head"><div><h1>Settings</h1><p>Make it yours. Everything is stored only on this device.</p></div></div>
     <div class="cols" style="margin-top:0">
       <div class="panel"><h2>Profile</h2><div class="stack">
         <label class="field"><span>Your name</span><input class="input" id="sName" value="${esc(s.name)}" maxlength="30"></label>
@@ -906,7 +910,12 @@ function viewSettings() {
     <div class="cols">
       <div class="panel"><h2>Expense categories <button class="btn small" data-cat-add="expense">${icon('plus')}Add</button></h2>${catList('expense')}</div>
       <div class="panel"><h2>Income categories <button class="btn small" data-cat-add="income">${icon('plus')}Add</button></h2>${catList('income')}</div>
-    </div>`;
+    </div>
+    <section class="about" aria-label="About">
+      ${logo(44)}
+      <div class="about-text"><strong>Pocket Ledger</strong><span>Version ${APP_VERSION}</span></div>
+      <div class="about-credit">Designed and developed by <b>${AUTHOR}</b><span>© ${now().getFullYear()} ${AUTHOR}. Your data never leaves your device.</span></div>
+    </section>`;
 }
 function catForm(c = {}, type) {
   type = c.type || type;
@@ -932,7 +941,7 @@ function applyTheme() {
 /* ================= onboarding ================= */
 function viewWelcome() {
   const s = state.settings;
-  return `<div class="welcome"><div class="modal"><div class="modal-body" style="padding:30px 32px">
+  return `<div class="welcome"><div class="welcome-inner"><div class="modal"><div class="modal-body" style="padding:30px 32px">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">${logo(40)}<div><h1>Pocket Ledger</h1><p class="muted" style="margin:0">Know what you can spend today, and make it to the end of the week.</p></div></div>
     <div class="stack">
       <label class="field"><span>What should we call you?</span><input class="input" id="wName" placeholder="Your first name" maxlength="30" autofocus></label>
@@ -943,7 +952,8 @@ function viewWelcome() {
       <label class="field"><span>Most you want to spend in a week</span><input class="input" id="wLimit" type="number" min="0" placeholder="e.g. 5000"></label>
       <p class="hint">Leave out rent and bills. You can change any of this later in Settings.</p>
       <button class="btn primary" id="wGo" style="padding:11px">Start tracking</button>
-    </div></div></div></div>`;
+    </div></div></div>
+    <p class="welcome-credit">Designed and developed by ${AUTHOR} · v${APP_VERSION}</p></div></div>`;
 }
 function bindWelcome() {
   $('#wGo').onclick = () => {
@@ -972,7 +982,8 @@ function render() {
   root.innerHTML = `<div class="app"><aside class="side"><div class="brand">${logo()}<span class="brand-name">Pocket Ledger</span></div>
     <nav class="nav">${NAV.map(([k, l, ic]) => `<button data-nav="${k}" class="${ui.view === k ? 'on' : ''} ${PHONE_BAR.includes(k) ? '' : 'phone-hide'}" ${ui.view === k ? 'aria-current="page"' : ''}>${icon(ic)}<span>${l}</span></button>`).join('')}
       <button class="more-btn ${PHONE_BAR.includes(ui.view) ? '' : 'on'}" id="moreBtn">${icon('more')}<span>More</span></button></nav>
-    <div class="side-foot">${w.B ? `Left this week<strong>${money(w.remaining)}</strong>` : `Balance<strong>${money(totalBalance())}</strong>`}</div></aside>
+    <div class="side-foot">${w.B ? `Left this week<strong>${money(w.remaining)}</strong>` : `Balance<strong>${money(totalBalance())}</strong>`}
+      <div class="credit">Designed &amp; developed by ${AUTHOR.replace(' ', '&nbsp;')}</div></div></aside>
     <main class="main"><div class="page">${views[ui.view]()}</div></main>
     <button class="fab" data-add="expense" aria-label="Add expense">${icon('plus')}</button></div>`;
   drawCharts();
@@ -1070,9 +1081,20 @@ async function boot() {
   setInterval(() => { const t = today(); if (t !== boot.last) { boot.last = t; postDueRecurring(); if (!$('#overlay')) render(); } }, 60000);
   boot.last = today();
 }
-let booted = false;
-const start = () => { if (!booted) { booted = true; boot(); } };
-window.addEventListener('pywebviewready', start);
-// Outside the desktop app (plain browser), fall back to local storage.
-setTimeout(() => { if (!window.pywebview) start(); }, 700);
+/* Automated tests (tests/app.test.mjs) set __LEDGER_TEST__ before loading this file
+   to reach the functions inside, and start the app themselves. */
+if (window.__LEDGER_TEST__) {
+  window.__ledger = {
+    get state() { return state; }, set state(v) { state = v; }, ui,
+    defaultState, migrate, render, money, esc, addDays, addMonths, daysBetween, weekStartOf, toISO, parseISO,
+    weekInfo, accountBalance, totalBalance, postDueRecurring, nextOccurrence, budgetStatus, filteredTx,
+    periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural,
+  };
+} else {
+  let booted = false;
+  const start = () => { if (!booted) { booted = true; boot(); } };
+  window.addEventListener('pywebviewready', start);
+  // Outside the desktop app (plain browser), fall back to local storage.
+  setTimeout(() => { if (!window.pywebview) start(); }, 700);
+}
 })();
