@@ -332,6 +332,26 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .cols, .stats, .grid2 { grid-template-columns: 1fr; }
 }
 
+/* Splash: brand screen while the app starts. Always the dark brand green, in light and dark mode. */
+.splash {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: env(safe-area-inset-top) 24px calc(env(safe-area-inset-bottom) + 28px);
+  background: #12302a; color: #cfe3dc; text-align: center;
+  transition: opacity .4s ease, visibility .4s;
+}
+.splash.hide { opacity: 0; visibility: hidden; }
+.splash-main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.splash-logo { width: 84px; height: 84px; animation: splash-in .6s cubic-bezier(.2, .8, .2, 1) both; }
+.splash h1 { font-family: var(--num); font-weight: 400; font-size: 34px; color: #fff; margin: 18px 0 4px; animation: splash-in .6s .08s cubic-bezier(.2, .8, .2, 1) both; }
+.splash p { margin: 0; font-size: 15px; opacity: .75; animation: splash-in .6s .16s cubic-bezier(.2, .8, .2, 1) both; }
+.splash-credit { font-size: 13px; line-height: 1.6; opacity: .8; display: flex; flex-direction: column; animation: splash-in .6s .3s both; }
+.splash-credit b { color: #fff; font-weight: 600; }
+.splash-credit span { font-size: 11.5px; opacity: .7; }
+@keyframes splash-in { from { opacity: 0; transform: translateY(10px) scale(.96); } }
+
+.more-credit { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); text-align: center; font-size: 12px; color: var(--muted); }
+
 /* "New version ready" banner: top centre, clear of the tab bar, + button and toasts */
 .update-banner {
   position: fixed; z-index: 110; left: 50%; transform: translateX(-50%);

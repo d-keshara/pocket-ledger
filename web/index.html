@@ -14,6 +14,15 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 </head>
 <body>
+<!-- Splash: plain HTML so it appears the moment the app opens; app.js fades it out. -->
+<div class="splash" id="splash" aria-hidden="true">
+  <div class="splash-main">
+    <svg class="splash-logo" viewBox="0 0 32 32"><rect x="2" y="6" width="28" height="20" rx="5" fill="#5fd3b8"/><rect x="2" y="11" width="28" height="4" fill="#12302a" opacity=".35"/><rect x="18" y="17" width="12" height="7" rx="3.5" fill="#12302a"/><circle cx="22" cy="20.5" r="1.6" fill="#5fd3b8"/></svg>
+    <h1>Pocket Ledger</h1>
+    <p>Know what you can spend today.</p>
+  </div>
+  <div class="splash-credit">Designed &amp; developed by <b>D.&nbsp;Kezara</b><span id="splashVersion"></span></div>
+</div>
 <div id="root"></div>
 <div id="tip" role="tooltip"></div>
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>
@@ -23,7 +32,7 @@
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js');
   }
-    // Ask the browser to keep our data even when the phone is low on space
+  // Ask the browser to keep our data even when the phone is low on space
   navigator.storage?.persist?.();
   // iPhone ignores user-scalable=no in some cases; cancelling its pinch "gesture" events stops zoom there too.
   document.addEventListener('gesturestart', (e) => e.preventDefault());

@@ -3,7 +3,7 @@
 'use strict';
 
 /* ================= constants ================= */
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 const AUTHOR = 'D. Kezara';
 const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948', '#5f6b66', '#0f6b5c'];
 const CURRENCIES = [
@@ -1082,7 +1082,8 @@ function bindCommon(root) {
   on('[data-add]', (el) => txForm({ type: el.dataset.add }));
   on('#moreBtn', () => openModal({
     title: 'More',
-    body: `<div class="nav more-list">${NAV.filter(([k]) => !PHONE_BAR.includes(k)).map(([k, l, ic]) => `<button data-nav="${k}" class="${ui.view === k ? 'on' : ''}">${icon(ic)}<span>${l}</span></button>`).join('')}</div>`,
+    body: `<div class="nav more-list">${NAV.filter(([k]) => !PHONE_BAR.includes(k)).map(([k, l, ic]) => `<button data-nav="${k}" class="${ui.view === k ? 'on' : ''}">${icon(ic)}<span>${l}</span></button>`).join('')}</div>
+      <p class="more-credit">Pocket Ledger ${APP_VERSION} · Designed &amp; developed by ${AUTHOR}</p>`,
     onMount: (m) => $$('[data-nav]', m).forEach((b) => b.onclick = () => { closeModal(); ui.view = b.dataset.nav; render(); $('.main').scrollTop = 0; }),
   }));
   on('#setBudget', weeklyLimitForm);
@@ -1178,11 +1179,22 @@ function migrate(d) {
   d.version = 1;
   return d;
 }
+/* ================= splash ================= */
+const SPLASH_MIN_MS = 1200; // long enough to read, short enough not to annoy
+const splashVersion = document.getElementById('splashVersion');
+if (splashVersion) splashVersion.textContent = `Version ${APP_VERSION}`;
+function hideSplash() {
+  const el = document.getElementById('splash'); if (!el) return;
+  const wait = Math.max(0, SPLASH_MIN_MS - performance.now()); // performance.now() = ms since the app opened
+  setTimeout(() => { el.classList.add('hide'); setTimeout(() => el.remove(), 450); }, wait);
+}
+
 async function boot() {
   const data = await loadState();
   state = data ? migrate(data) : defaultState();
   postDueRecurring();
   render();
+  hideSplash();
   // Re-render at midnight so "today" stays correct if the app is left open.
   setInterval(() => { const t = today(); if (t !== boot.last) { boot.last = t; postDueRecurring(); if (!$('#overlay')) render(); } }, 60000);
   boot.last = today();
@@ -1195,7 +1207,7 @@ if (window.__LEDGER_TEST__) {
     defaultState, migrate, render, money, esc, addDays, addMonths, daysBetween, weekStartOf, toISO, parseISO,
     weekInfo, accountBalance, totalBalance, postDueRecurring, nextOccurrence, budgetStatus, filteredTx,
     periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner,
-    backupDue, saveBackup, snoozeBackup, lastBackupText, hideTip, TIP_TOUCH_MS,
+    backupDue, saveBackup, snoozeBackup, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
   };
 } else {
   let booted = false;
