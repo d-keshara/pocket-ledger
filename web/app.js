@@ -13,6 +13,7 @@ const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const ICONS = {
+  more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
   home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
   target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
@@ -447,6 +448,8 @@ function ring(pct) {
 }
 
 /* ================= views ================= */
+/* On phones only the first four pages fit in the bottom bar; the rest live behind "More". */
+const PHONE_BAR = ['dashboard', 'transactions', 'budgets', 'reports'];
 const NAV = [
   ['dashboard', 'This week', 'home'], ['transactions', 'Transactions', 'list'], ['budgets', 'Budgets', 'target'],
   ['goals', 'Savings goals', 'flag'], ['recurring', 'Scheduled', 'repeat'], ['reports', 'Reports', 'chart'],
@@ -967,9 +970,11 @@ function render() {
   chartSpecs.length = 0;
   const w = weekInfo();
   root.innerHTML = `<div class="app"><aside class="side"><div class="brand">${logo()}<span class="brand-name">Pocket Ledger</span></div>
-    <nav class="nav">${NAV.map(([k, l, ic]) => `<button data-nav="${k}" class="${ui.view === k ? 'on' : ''}" ${ui.view === k ? 'aria-current="page"' : ''}>${icon(ic)}<span>${l}</span></button>`).join('')}</nav>
+    <nav class="nav">${NAV.map(([k, l, ic]) => `<button data-nav="${k}" class="${ui.view === k ? 'on' : ''} ${PHONE_BAR.includes(k) ? '' : 'phone-hide'}" ${ui.view === k ? 'aria-current="page"' : ''}>${icon(ic)}<span>${l}</span></button>`).join('')}
+      <button class="more-btn ${PHONE_BAR.includes(ui.view) ? '' : 'on'}" id="moreBtn">${icon('more')}<span>More</span></button></nav>
     <div class="side-foot">${w.B ? `Left this week<strong>${money(w.remaining)}</strong>` : `Balance<strong>${money(totalBalance())}</strong>`}</div></aside>
-    <main class="main"><div class="page">${views[ui.view]()}</div></main></div>`;
+    <main class="main"><div class="page">${views[ui.view]()}</div></main>
+    <button class="fab" data-add="expense" aria-label="Add expense">${icon('plus')}</button></div>`;
   drawCharts();
   $('.main').scrollTop = scroll;
   bindCommon(root);
@@ -982,6 +987,11 @@ function bindCommon(root) {
   on('[data-nav]', (el) => { ui.view = el.dataset.nav; $('.main').scrollTop = 0; render(); $('.main').scrollTop = 0; });
   on('[data-go]', (el) => { ui.view = el.dataset.go; render(); $('.main').scrollTop = 0; });
   on('[data-add]', (el) => txForm({ type: el.dataset.add }));
+  on('#moreBtn', () => openModal({
+    title: 'More',
+    body: `<div class="nav more-list">${NAV.filter(([k]) => !PHONE_BAR.includes(k)).map(([k, l, ic]) => `<button data-nav="${k}" class="${ui.view === k ? 'on' : ''}">${icon(ic)}<span>${l}</span></button>`).join('')}</div>`,
+    onMount: (m) => $$('[data-nav]', m).forEach((b) => b.onclick = () => { closeModal(); ui.view = b.dataset.nav; render(); $('.main').scrollTop = 0; }),
+  }));
   on('#setBudget', weeklyLimitForm);
   on('#addBudget, #addBudget2', () => budgetForm());
   on('[data-edit-budget]', (el) => budgetForm(state.budgets.find((b) => b.id === el.dataset.editBudget)));

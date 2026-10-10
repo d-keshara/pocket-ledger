@@ -72,6 +72,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .nav button svg { width: 18px; height: 18px; flex: none; opacity: .8; }
 .nav button:hover { background: var(--side-hover); color: var(--side-ink-strong); }
 .nav button.on { background: var(--side-hover); color: var(--side-ink-strong); box-shadow: inset 3px 0 0 #5fd3b8; }
+/* Phone-only controls: hidden on desktop, shown by the phone layout below. */
+.nav .more-btn, .fab { display: none; }
+.more-list button { color: var(--ink); }
+.more-list button:hover, .more-list button.on { background: var(--surface-2); color: var(--ink); box-shadow: none; }
 .side-foot { margin-top: auto; padding: 0 10px; font-size: 12px; line-height: 1.4; }
 .side-foot strong { display: block; color: var(--side-ink-strong); font-family: var(--num); font-size: 18px; font-weight: 400; }
 
@@ -285,6 +289,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .welcome { min-height: 100vh; display: grid; place-items: center; padding: 30px; background: var(--side); }
 .welcome .modal { animation: none; width: min(560px, 100%); }
 .welcome h1 { font-family: var(--num); font-weight: 400; font-size: 30px; margin: 0 0 4px; }
+.welcome .brand-mark { width: 44px; height: 44px; flex: none; }
 
 .list-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .list-row:last-child { border-bottom: 0; }
@@ -304,3 +309,68 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .page { padding: 20px 16px 50px; }
   .cols, .stats, .grid2 { grid-template-columns: 1fr; }
 }
+
+/* ================= Phone layout (written by you in Phase 1) ================= */
+@media (max-width: 640px) {
+  /* 1. Two-row grid: content on top, nav bar at the bottom */
+  .app { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+
+  /* 2. Sidebar becomes a bottom tab bar.
+          env(safe-area-inset-bottom) = height of the iPhone home-bar area */
+    .side {
+      grid-row: 2; flex-direction: row;
+      padding: 0 0 env(safe-area-inset-bottom);
+    }
+    .brand, .side-foot, .phone-hide { display: none; }
+    .nav { flex-direction: row; width: 100%; gap: 0; }
+    .nav button {
+      flex: 1;                         /* every tab gets equal width */
+      flex-direction: column; gap: 3px;
+      padding: 9px 2px 8px; border-radius: 0;
+      font-size: 11px; justify-content: center;
+    }
+    .nav span { display: block; }      /* the 820px rule hid labels; bring them back */
+    .nav button.on { box-shadow: inset 0 3px 0 #5fd3b8; }  /* top line instead of left */
+    .nav .more-btn { display: flex; }  /* same specificity as the hide rule, comes later, so it wins */
+
+    /* 3. Floating "+" button above the tab bar, where the thumb rests */
+      .fab {
+        display: grid; place-items: center;
+        position: fixed; right: 16px;
+        bottom: calc(78px + env(safe-area-inset-bottom));
+        width: 58px; height: 58px; border-radius: 18px; border: 0;
+        background: var(--accent); color: var(--on-accent);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, .25); z-index: 40;
+      }
+      .fab svg { width: 26px; height: 26px; }
+
+       /* 4. Tighter spacing; extra bottom padding so the + never covers content */
+        .page { padding: 16px 16px 100px; }
+        .head h1 { font-size: 24px; }
+        .runway { padding: 18px; gap: 18px; }
+        .runway-lead .big { font-size: 40px; }
+        .days { gap: 6px; }
+        .day .col { height: 100px; }
+        .stats { grid-template-columns: 1fr 1fr; gap: 10px; }
+        .stat .v { font-size: 19px; }
+        .hbar { grid-template-columns: 96px 1fr 80px; }
+        .filters .input { flex: 1 1 45%; min-width: 0; }
+        .panel { overflow-x: auto; }       /* wide tables scroll inside their box, not the page */
+
+        /* 5. Modals become "bottom sheets" — slide up from the bottom like native apps */
+          .overlay { place-items: end center; padding: 0; }
+          .modal {
+            width: 100%; max-height: 92vh;
+            border-radius: 18px 18px 0 0;
+            padding-bottom: env(safe-area-inset-bottom);
+          }
+
+          .input { font-size: 16px;}
+        }
+
+@media (hover: none) {
+   .tx .row-actions {opacity: 1;}
+}
+
+
+
