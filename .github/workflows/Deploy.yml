@@ -1,0 +1,31 @@
+# Publishes the web/ folder to GitHub Pages every time you push to main.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]      # run when you push to main
+  workflow_dispatch:      # also adds a "Run workflow" button on GitHub
+
+permissions:
+  contents: read          # can read your code
+  pages: write            # can publish to Pages
+  id-token: write         # proves to Pages that this robot is really you
+
+concurrency:
+  group: pages
+  cancel-in-progress: true   # if you push twice quickly, only the newest deploys
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest    # GitHub gives us a free Linux computer for this
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4              # 1. download your code
+      - uses: actions/configure-pages@v5       # 2. prepare Pages
+      - uses: actions/upload-pages-artifact@v3 # 3. package the web/ folder
+        with:
+          path: web
+      - id: deployment
+        uses: actions/deploy-pages@v4          # 4. publish it
