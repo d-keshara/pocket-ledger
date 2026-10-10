@@ -22,6 +22,8 @@
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js');
   }
+    // Ask the browser to keep our data even when the phone is low on space
+  navigator.storage?.persist?.();
 </script>
 </body>
 </html>
