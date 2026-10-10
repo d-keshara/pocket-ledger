@@ -3,7 +3,7 @@
 'use strict';
 
 /* ================= constants ================= */
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 const AUTHOR = 'D. Kezara';
 const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948', '#5f6b66', '#0f6b5c'];
 const CURRENCIES = [
@@ -1064,6 +1064,28 @@ function bindSettings(root) {
   });
 }
 
+/* ================= app updates ================= */
+/* sw.js sends "update-ready" when it has downloaded newer files into the cache.
+   Reloading then shows the new version straight away. */
+function showUpdateBanner() {
+  if ($('#updateBanner')) return; // several files can change at once; show one banner
+  const el = document.createElement('div');
+  el.id = 'updateBanner'; el.className = 'update-banner'; el.setAttribute('role', 'status');
+  el.innerHTML = `<span>A new version of Pocket Ledger is ready.</span>
+    <button class="btn small primary" id="updNow">Refresh</button>
+    <button class="icon-btn" id="updLater" aria-label="Not now">${icon('x')}</button>`;
+  document.body.appendChild(el);
+  // Wait a moment so any change typed just before is saved (save() waits 150ms).
+  $('#updNow').onclick = () => setTimeout(() => location.reload(), 250);
+  $('#updLater').onclick = () => el.remove();
+}
+if ('serviceWorker' in navigator) {
+  // A brand-new install also "changes controller", so only count it if one was running before.
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('message', (e) => { if (e.data?.type === 'update-ready') showUpdateBanner(); });
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) showUpdateBanner(); });
+}
+
 /* ================= boot ================= */
 function migrate(d) {
   const base = defaultState();
@@ -1088,7 +1110,7 @@ if (window.__LEDGER_TEST__) {
     get state() { return state; }, set state(v) { state = v; }, ui,
     defaultState, migrate, render, money, esc, addDays, addMonths, daysBetween, weekStartOf, toISO, parseISO,
     weekInfo, accountBalance, totalBalance, postDueRecurring, nextOccurrence, budgetStatus, filteredTx,
-    periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural,
+    periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner,
   };
 } else {
   let booted = false;

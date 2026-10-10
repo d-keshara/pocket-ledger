@@ -326,6 +326,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .cols, .stats, .grid2 { grid-template-columns: 1fr; }
 }
 
+/* "New version ready" banner: top centre, clear of the tab bar, + button and toasts */
+.update-banner {
+  position: fixed; z-index: 110; left: 50%; transform: translateX(-50%);
+  top: calc(env(safe-area-inset-top, 0px) + 14px);
+  display: flex; align-items: center; gap: 10px;
+  width: max-content; max-width: calc(100% - 32px);
+  padding: 8px 8px 8px 16px; border-radius: 12px;
+  background: var(--ink); color: var(--bg); font-size: 13.5px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .25); animation: drop .2s;
+}
+.update-banner .icon-btn { color: inherit; opacity: .7; }
+.update-banner .icon-btn:hover { background: rgba(127, 127, 127, .2); color: inherit; opacity: 1; }
+@keyframes drop { from { opacity: 0; transform: translate(-50%, -10px); } }
+
 /* ================= Phone layout (written by you in Phase 1) ================= */
 @media (max-width: 640px) {
   /* 1. Two-row grid: content on top, nav bar at the bottom */

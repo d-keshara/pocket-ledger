@@ -328,3 +328,18 @@ describe('rendering', () => {
     assert.equal(L.esc('<a href="x">'), '&lt;a href=&quot;x&quot;&gt;');
   });
 });
+
+/* ---------------------------------------------------- update banner */
+describe('update banner', () => {
+  test('shows only one banner even if several files changed', (t) => {
+    const { L, doc, close } = makeApp(); t.after(close);
+    L.showUpdateBanner();
+    L.showUpdateBanner();
+    L.showUpdateBanner();
+    assert.equal(doc.querySelectorAll('.update-banner').length, 1);
+    assert.match(doc.querySelector('.update-banner').textContent, /new version/);
+  });
+
+  // ✏️ EXERCISE: write this test yourself (see the lesson). Remove `.todo` when you start.
+  test.todo('"Not now" button closes the banner');
+});
