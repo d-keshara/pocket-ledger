@@ -811,8 +811,8 @@ function viewRecurring() {
   return `<div class="head"><div><h1>Scheduled payments</h1><p>Salary, rent, subscriptions: set them once and they’re logged on the day they’re due.</p></div>
     <div class="actions"><button class="btn primary" id="addRec">${icon('plus')}Schedule a payment</button></div></div>
     <div class="panel">${list.length ? `<p class="hint" style="margin:0 0 6px">Scheduled expenses cost about <b class="num" style="font-size:15px;color:var(--ink)">${money(monthlyCost)}</b> a month.</p>
-    <table class="table"><thead><tr><th>Name</th><th>Category</th><th>Repeats</th><th>Next</th><th class="r">Amount</th><th></th></tr></thead><tbody>
-    ${list.map((r) => `<tr style="${r.active ? '' : 'opacity:.5'}"><td><b>${esc(r.note || catName(r.categoryId))}</b><div class="muted" style="font-size:12.5px">${esc(acc(r.accountId)?.name || '')}</div></td>
+    <table class="table rec-table"><thead><tr><th>Name</th><th>Category</th><th>Repeats</th><th>Next</th><th class="r">Amount</th><th></th></tr></thead><tbody>
+    ${list.map((r) => `<tr style="${r.active ? '' : 'opacity:.5'}"><td><b>${esc(r.note || catName(r.categoryId))}</b><div class="muted" style="font-size:12.5px">${esc(acc(r.accountId)?.name || '')}<span class="phone-only"> · ${FREQ[r.frequency]}</span></div></td>
       <td><i class="dot" style="background:${cat(r.categoryId)?.color}"></i> ${esc(catName(r.categoryId))}</td><td>${FREQ[r.frequency]}</td><td>${r.active ? fmtDate(r.nextDate) : 'Paused'}</td>
       <td class="r num ${r.type === 'income' ? 'pos' : ''}" style="font-size:15px">${money(r.type === 'income' ? r.amount : -r.amount, { sign: true })}</td>
       <td class="r" style="white-space:nowrap"><button class="icon-btn" data-rec-toggle="${r.id}" aria-label="${r.active ? 'Pause' : 'Resume'}" data-tip="${r.active ? 'Pause' : 'Resume'}">${icon(r.active ? 'pause' : 'play')}</button><button class="icon-btn" data-rec-edit="${r.id}" aria-label="Edit">${icon('edit')}</button><button class="icon-btn" data-rec-del="${r.id}" aria-label="Delete">${icon('trash')}</button></td></tr>`).join('')}
