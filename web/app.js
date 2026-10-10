@@ -3,7 +3,7 @@
 'use strict';
 
 /* ================= constants ================= */
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 const AUTHOR = 'D. Kezara';
 const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948', '#5f6b66', '#0f6b5c'];
 const CURRENCIES = [
@@ -109,7 +109,8 @@ function defaultState() {
   const inc = ['Salary', 'Freelance & side work', 'Pocket money', 'Gifts received', 'Other income'];
   return {
     version: 1,
-    settings: { name: '', currency: 'LKR', symbol: 'Rs', decimals: true, weekStart: 1, weeklyBudget: 0, theme: 'system', onboarded: false },
+    settings: { name: '', currency: 'LKR', symbol: 'Rs', decimals: true, weekStart: 1, weeklyBudget: 0, theme: 'system', onboarded: false,
+      lastBackup: '', backupSnoozeUntil: '' },
     accounts: [
       { id: uid(), name: 'Cash', initial: 0, color: PALETTE[2] },
       { id: uid(), name: 'Bank account', initial: 0, color: PALETTE[0] },
@@ -524,6 +525,7 @@ function viewDashboard() {
     <div class="actions"><button class="btn" data-add="income">${icon('plus')}Income</button><button class="btn primary" data-add="expense">${icon('plus')}Expense</button></div></div>
     <section class="runway" aria-label="This week">${lead}<div class="days">${daysHtml}</div>${notes}</section>
     ${alertHtml}
+    ${backupCard()}
     <div class="stats">
       <div class="stat"><div class="k">Total balance</div><div class="v">${money(totalBalance())}</div><div class="d">${state.accounts.length} account${state.accounts.length === 1 ? '' : 's'}</div></div>
       <div class="stat"><div class="k">Income in ${MONTH_SHORT[now().getMonth()]}</div><div class="v pos">${money(mInc)}</div><div class="d">${plural(incomeIn(mFrom, mTo).length, 'payment')}</div></div>
@@ -542,6 +544,15 @@ function viewDashboard() {
         ${upcoming.length ? `<div class="tx-list">${upcoming.map((r) => `<div class="tx"><div class="glyph" style="background:${cat(r.categoryId)?.color || '#5f6b66'}">${esc(catName(r.categoryId)[0])}</div><div style="min-width:0"><div class="t1">${esc(r.note || catName(r.categoryId))}</div><div class="t2">${fmtDate(r.nextDate)} · ${FREQ[r.frequency]}</div></div><div class="amt ${r.type === 'income' ? 'pos' : ''}">${money(r.type === 'income' ? r.amount : -r.amount, { sign: true })}</div><div></div></div>`).join('')}</div>`
         : empty('repeat', 'Nothing scheduled', 'Add salary, rent or subscriptions once and they’ll be logged automatically.', `<button class="btn" data-go="recurring">Schedule a payment</button>`)}</div>
     </div>`;
+}
+
+function backupCard() {
+  const days = backupDue();
+  if (!days) return '';
+  const why = state.settings.lastBackup ? `It’s been ${days} days since your last backup.` : 'You haven’t saved a backup yet.';
+  return `<div class="alert backup" role="status">${icon('download')}
+    <div><b>Back up your money history.</b> ${why} If your phone is reset or the app is deleted, a backup is the only way to get it back.</div>
+    <div class="alert-actions"><button class="btn small primary" id="backupNow">Save backup</button><button class="btn small ghost" id="backupLater">Remind me in 7 days</button></div></div>`;
 }
 
 /* ---------- transactions ---------- */
@@ -607,14 +618,52 @@ async function exportCsv(list) {
   const csv = rows.map((r) => r.map(q).join(',')).join('\r\n');
   await saveText(`transactions-${today()}.csv`, csv, 'text/csv');
 }
+/* Saves a text file and returns true if it was saved, false if the person cancelled. */
 async function saveText(name, text, mime) {
   if (hasApi()) {
     const p = await window.pywebview.api.save_file(name, text);
     if (p) toast('Saved to ' + p);
-  } else {
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: mime })); a.download = name; a.click();
-    toast('Downloaded ' + name);
+    return !!p;
   }
+  // Phones: open the share sheet, which offers "Save to Files", Drive, WhatsApp...
+  const file = typeof File === 'function' ? new File([text], name, { type: mime }) : null;
+  if (file && navigator.canShare?.({ files: [file] }) && matchMedia('(hover: none)').matches) {
+    try { await navigator.share({ files: [file], title: name }); return true; }
+    catch (e) { if (e.name === 'AbortError') return false; } // cancelled; other errors fall back to download
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: mime })); a.download = name; a.click();
+  toast('Downloaded ' + name);
+  return true;
+}
+
+/* ---------- backups ---------- */
+const BACKUP_EVERY_DAYS = 14;
+/* Returns how many days since the last backup if a reminder is due, otherwise 0. */
+function backupDue(st = state, t = today()) {
+  if (st.transactions.length < 5) return 0;                                   // nothing much to lose yet
+  if (st.settings.backupSnoozeUntil && t < st.settings.backupSnoozeUntil) return 0; // "remind me later"
+  const since = st.settings.lastBackup || st.transactions.map((x) => x.date).sort()[0];
+  const days = daysBetween(since, t);
+  return days >= BACKUP_EVERY_DAYS ? days : 0;
+}
+async function saveBackup() {
+  const ok = await saveText(`pocket-ledger-backup-${today()}.json`, JSON.stringify(state, null, 1), 'application/json');
+  if (!ok) return;
+  state.settings.lastBackup = today();
+  state.settings.backupSnoozeUntil = '';
+  save(); render();
+  toast('Backup saved');
+}
+function snoozeBackup() {
+  state.settings.backupSnoozeUntil = addDays(today(), 7);
+  save(); render();
+  toast('We’ll remind you in 7 days');
+}
+function lastBackupText() {
+  const lb = state.settings.lastBackup;
+  if (!lb) return 'No backup saved yet.';
+  const d = daysBetween(lb, today());
+  return `Last backup: ${fmtDate(lb, { full: true })}${d ? ` (${plural(d, 'day')} ago)` : ' (today)'}.`;
 }
 
 /* ---------- budgets ---------- */
@@ -900,7 +949,8 @@ function viewSettings() {
         <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="sDec" ${s.decimals ? 'checked' : ''}> Show cents / decimals</label>
       </div></div>
       <div class="panel"><h2>Your data</h2><div class="stack">
-        <p class="hint" style="margin:0">Back up regularly so you never lose your history. A backup can be restored on another computer.</p>
+        <p class="hint" style="margin:0">Back up regularly so you never lose your history. A backup can be restored on another device.</p>
+        <p class="hint" id="lastBackup" style="margin:0;color:var(--ink-2)">${lastBackupText()}</p>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="backup">${icon('download')}Save backup</button><button class="btn" id="restore">${icon('upload')}Restore backup</button><button class="btn" id="csvAll">${icon('download')}Export all as CSV</button></div>
         <p class="hint" id="dataLoc" style="margin:0"></p>
         <div style="border-top:1px solid var(--line);padding-top:14px"><button class="btn danger" id="reset">${icon('trash')}Erase all data</button></div>
@@ -1004,6 +1054,8 @@ function bindCommon(root) {
     onMount: (m) => $$('[data-nav]', m).forEach((b) => b.onclick = () => { closeModal(); ui.view = b.dataset.nav; render(); $('.main').scrollTop = 0; }),
   }));
   on('#setBudget', weeklyLimitForm);
+  on('#backupNow', saveBackup);
+  on('#backupLater', snoozeBackup);
   on('#addBudget, #addBudget2', () => budgetForm());
   on('[data-edit-budget]', (el) => budgetForm(state.budgets.find((b) => b.id === el.dataset.editBudget)));
   on('[data-del-budget]', (el) => { state.budgets = state.budgets.filter((b) => b.id !== el.dataset.delBudget); save(); render(); toast('Budget removed'); });
@@ -1034,7 +1086,7 @@ function bindSettings(root) {
   $('#sWeek', root).onchange = (e) => { s.weekStart = +e.target.value; save(); render(); };
   $('#sTheme', root).onchange = (e) => { s.theme = e.target.value; save(); render(); };
   $('#sDec', root).onchange = (e) => { s.decimals = e.target.checked; save(); render(); };
-  $('#backup', root).onclick = () => saveText(`pocket-ledger-backup-${today()}.json`, JSON.stringify(state, null, 1), 'application/json');
+  $('#backup', root).onclick = saveBackup;
   $('#csvAll', root).onclick = () => exportCsv(state.transactions);
   $('#restore', root).onclick = async () => {
     const apply = (data) => {
@@ -1111,6 +1163,7 @@ if (window.__LEDGER_TEST__) {
     defaultState, migrate, render, money, esc, addDays, addMonths, daysBetween, weekStartOf, toISO, parseISO,
     weekInfo, accountBalance, totalBalance, postDueRecurring, nextOccurrence, budgetStatus, filteredTx,
     periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner,
+    backupDue, saveBackup, snoozeBackup, lastBackupText,
   };
 } else {
   let booted = false;
