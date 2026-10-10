@@ -284,6 +284,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .alert.warn { background: var(--warn-soft); color: var(--warn); }
 .alert svg { width: 18px; height: 18px; flex: none; margin-top: 1px; }
 .alert b { color: inherit; }
+.alert.backup { background: var(--accent-soft); color: var(--ink); align-items: center; flex-wrap: wrap; }
+.alert.backup > svg { color: var(--accent); }
+.alert.backup > div:first-of-type { flex: 1; min-width: 220px; }
+.alert-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* onboarding */
 .welcome { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 30px; background: var(--side); }

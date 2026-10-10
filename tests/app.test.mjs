@@ -349,3 +349,77 @@ describe('update banner', () => {
     assert.equal(doc.querySelector('.update-banner'), null);  // Assert: it should be gone
   });
 });
+
+/* --------------------------------------------------- backup reminder */
+describe('backup reminder', () => {
+  // Adds `count` small expenses, the oldest one `oldestDaysAgo` days before today (7 Oct).
+  const addHistory = (app, count, oldestDaysAgo) => {
+    for (let i = 0; i < count; i++) {
+      app.add({ type: 'expense', amount: 100, date: app.L.addDays('2026-10-07', -oldestDaysAgo + i), categoryId: app.expenseCat('Food').id });
+    }
+  };
+
+  test('new users with under 5 transactions are not nagged', (t) => {
+    const app = makeApp(); t.after(app.close);
+    addHistory(app, 4, 60);
+    assert.equal(app.L.backupDue(), 0);
+  });
+
+  test('never backed up: due once the oldest transaction is 14+ days old', (t) => {
+    const app = makeApp(); t.after(app.close);
+    addHistory(app, 5, 20);
+    assert.equal(app.L.backupDue(), 20);
+  });
+
+  test('a recent backup means no reminder', (t) => {
+    const app = makeApp(); t.after(app.close);
+    addHistory(app, 5, 60);
+    app.S.settings.lastBackup = '2026-10-04'; // 3 days ago
+    assert.equal(app.L.backupDue(), 0);
+    app.S.settings.lastBackup = '2026-09-23'; // exactly 14 days ago
+    assert.equal(app.L.backupDue(), 14);
+  });
+
+  test('"Remind me in 7 days" hides the card and snoozes for a week', (t) => {
+    const app = makeApp(); t.after(app.close);
+    addHistory(app, 5, 30);
+    app.L.ui.view = 'dashboard'; app.L.render();
+    assert.ok(app.doc.querySelector('.alert.backup'), 'card is shown');
+    app.doc.querySelector('#backupLater').click();
+    assert.equal(app.S.settings.backupSnoozeUntil, '2026-10-14');
+    assert.equal(app.doc.querySelector('.alert.backup'), null);
+  });
+
+  test('saving a backup records the date and removes the card', async (t) => {
+    const app = makeApp(); t.after(app.close);
+    app.w.URL.createObjectURL = () => 'blob:test'; // jsdom has no real file downloads
+    addHistory(app, 5, 30);
+    app.L.ui.view = 'dashboard'; app.L.render();
+    await app.L.saveBackup();
+    assert.equal(app.S.settings.lastBackup, '2026-10-07');
+    assert.equal(app.doc.querySelector('.alert.backup'), null);
+    assert.equal(app.L.lastBackupText(), 'Last backup: Wed, 7 Oct (today).');
+  });
+
+  test('old saved data gets the new backup fields (Rule 1: never break saved data)', (t) => {
+    const { L, close } = makeApp(); t.after(close);
+    const d = L.migrate({ settings: { name: 'Kezara' }, transactions: [] });
+    assert.equal(d.settings.lastBackup, '');
+    assert.equal(d.settings.backupSnoozeUntil, '');
+  });
+
+  // ✏️ EXERCISE: the snooze must END after 7 days. Remove `.todo` and fill in the blanks.
+  test.todo('the reminder comes back when the snooze date has passed');
+  /*
+  test('the reminder comes back when the snooze date has passed', (t) => {
+    const app = makeApp(); t.after(app.close);
+    addHistory(app, 5, 30);
+
+    app.S.settings.backupSnoozeUntil = '2026-10-10';           // snoozed until 3 days from now
+    assert.equal(app.L.backupDue(), ____);                       // while snoozed: no reminder
+
+    app.S.settings.backupSnoozeUntil = '2026-10-01';           // snooze ended last week
+    assert.equal(app.L.backupDue(), ____);                       // how many days since the oldest transaction?
+  });
+  */
+});
