@@ -472,3 +472,23 @@ describe('tooltips on phones', () => {
     assert.equal(tipShown(doc), false);
   });
 });
+
+/* ------------------------------------------------- splash & credit */
+describe('splash and credit', () => {
+  test('the splash fades out once the app has started', async (t) => {
+    const { w, doc, L, close } = makeApp(); t.after(close);
+    doc.body.insertAdjacentHTML('afterbegin', '<div class="splash" id="splash"></div>');
+    L.hideSplash();
+    await new Promise((r) => setTimeout(r, L.SPLASH_MIN_MS + 100));
+    const el = doc.getElementById('splash');
+    assert.ok(!el || el.classList.contains('hide'), 'splash is hidden');
+    void w;
+  });
+
+  test('the phone "More" menu shows the credit', (t) => {
+    const { doc, L, close } = makeApp(); t.after(close);
+    L.render();
+    doc.querySelector('#moreBtn').click();
+    assert.match(doc.querySelector('.more-credit').textContent, /Designed & developed by D\. Kezara/);
+  });
+});
