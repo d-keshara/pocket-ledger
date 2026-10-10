@@ -408,18 +408,14 @@ describe('backup reminder', () => {
     assert.equal(d.settings.backupSnoozeUntil, '');
   });
 
-  // ✏️ EXERCISE: the snooze must END after 7 days. Remove `.todo` and fill in the blanks.
-  test.todo('the reminder comes back when the snooze date has passed');
-  /*
   test('the reminder comes back when the snooze date has passed', (t) => {
     const app = makeApp(); t.after(app.close);
     addHistory(app, 5, 30);
 
     app.S.settings.backupSnoozeUntil = '2026-10-10';           // snoozed until 3 days from now
-    assert.equal(app.L.backupDue(), ____);                       // while snoozed: no reminder
+    assert.equal(app.L.backupDue(), 0);                          // while snoozed: no reminder
 
     app.S.settings.backupSnoozeUntil = '2026-10-01';           // snooze ended last week
-    assert.equal(app.L.backupDue(), ____);                       // how many days since the oldest transaction?
+    assert.equal(app.L.backupDue(), 30);                         // oldest transaction is 30 days old
   });
-  */
 });
