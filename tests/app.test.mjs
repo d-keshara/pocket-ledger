@@ -419,3 +419,56 @@ describe('backup reminder', () => {
     assert.equal(app.L.backupDue(), 30);                         // oldest transaction is 30 days old
   });
 });
+
+/* ------------------------------------------------- tooltips on touch */
+describe('tooltips on phones', () => {
+  // Fake a finger tap: pointerdown (with pointerType "touch") then click.
+  const tap = (w, el) => {
+    const down = new w.Event('pointerdown', { bubbles: true });
+    Object.defineProperty(down, 'pointerType', { value: 'touch' });
+    el.dispatchEvent(down);
+    el.click();
+  };
+  const setup = (t) => {
+    const app = makeApp(); t.after(app.close);
+    app.S.settings.weeklyBudget = 4000;
+    app.L.ui.view = 'dashboard'; app.L.render();
+    return app;
+  };
+  const tipShown = (doc) => doc.querySelector('#tip').classList.contains('show');
+
+  test('tapping a day shows its tooltip', (t) => {
+    const { w, doc } = setup(t);
+    tap(w, doc.querySelector('.day[data-tip]'));
+    assert.ok(tipShown(doc));
+    assert.match(doc.querySelector('#tip').textContent, /Spent|Plan up to/);
+  });
+
+  test('scrolling hides the tooltip (the bug from the screenshots)', (t) => {
+    const { w, doc } = setup(t);
+    tap(w, doc.querySelector('.day[data-tip]'));
+    doc.querySelector('.main').dispatchEvent(new w.Event('scroll')); // scroll events don't bubble; capture catches them
+    assert.equal(tipShown(doc), false);
+  });
+
+  test('tapping somewhere else hides it', (t) => {
+    const { w, doc } = setup(t);
+    tap(w, doc.querySelector('.day[data-tip]'));
+    tap(w, doc.querySelector('h1'));
+    assert.equal(tipShown(doc), false);
+  });
+
+  test('changing page hides it', (t) => {
+    const { w, doc, L } = setup(t);
+    tap(w, doc.querySelector('.day[data-tip]'));
+    L.ui.view = 'reports'; L.render();
+    assert.equal(tipShown(doc), false);
+  });
+
+  test('it fades out by itself after a moment', async (t) => {
+    const { w, doc, L } = setup(t);
+    tap(w, doc.querySelector('.day[data-tip]'));
+    await new Promise((r) => setTimeout(r, L.TIP_TOUCH_MS + 150));
+    assert.equal(tipShown(doc), false);
+  });
+});
