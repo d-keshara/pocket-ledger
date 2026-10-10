@@ -7,7 +7,7 @@
  *
  * Bump CACHE_VERSION whenever you add or rename files in APP_FILES.
  */
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE_NAME = `pocket-ledger-${CACHE_VERSION}`;
 const APP_FILES = [
   './',
@@ -21,7 +21,9 @@ const APP_FILES = [
 
 // install: runs once when a new service worker is found. Download the app files.
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_FILES)));
+  // cache: 'reload' = download from the server, never from the browser's HTTP cache.
+  const requests = APP_FILES.map((url) => new Request(url, { cache: 'reload' }));
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(requests)));
   self.skipWaiting();
 });
 
@@ -40,7 +42,9 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.open(CACHE_NAME).then(async (cache) => {
       const cached = await cache.match(event.request, { ignoreSearch: true });
-      const fresh = fetch(event.request)
+      // Build a new request from the URL: browsers refuse extra options on page-navigation requests.
+      // cache: 'no-cache' = ask the server if the file changed, skip the browser's 10-minute HTTP cache.
+      const fresh = fetch(new Request(event.request.url, { cache: 'no-cache' }))
         .then((res) => { if (res.ok) cache.put(event.request, res.clone()); return res; })
         .catch(() => cached); // offline: fall back to the cached copy
       return cached || fresh;
