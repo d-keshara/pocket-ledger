@@ -5,11 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Pocket Ledger</title>
 <link rel="stylesheet" href="styles.css">
+<!-- PWA: app ID card, status bar colour, iPhone icon, open full screen -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#12302a">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 </head>
 <body>
 <div id="root"></div>
 <div id="tip" role="tooltip"></div>
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>
 <script src="app.js"></script>
+<script>
+  // Register the service worker (only on http/https, not inside the .exe)
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    navigator.serviceWorker.register('sw.js');
+  }
+</script>
 </body>
 </html>
