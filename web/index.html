@@ -28,8 +28,8 @@
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>
 <script src="app.js"></script>
 <script>
-  // Register the service worker (only on http/https, not inside the .exe)
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  // Register the service worker (only on http/https, not inside the .exe or the Android app)
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !window.Capacitor?.isNativePlatform?.()) {
     navigator.serviceWorker.register('sw.js');
   }
   // Ask the browser to keep our data even when the phone is low on space

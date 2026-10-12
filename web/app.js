@@ -81,6 +81,8 @@ const ui = {
   reportPeriod: 'month',
 };
 
+// True inside the Android app built with Capacitor (see capacitor.config.json).
+const isNativeApp = () => !!window.Capacitor?.isNativePlatform?.();
 const hasApi = () => !!(window.pywebview && window.pywebview.api && window.pywebview.api.save_data);
 let saveTimer = null;
 function save() {
@@ -656,6 +658,18 @@ async function saveText(name, text, mime) {
     if (p) toast('Saved to ' + p);
     return !!p;
   }
+  // Android app (.apk): the WebView can't download, so write the file to the app's cache and open the share sheet.
+  if (isNativeApp()) {
+    const { Filesystem, Share } = window.Capacitor.Plugins;
+    try {
+      const { uri } = await Filesystem.writeFile({ path: name, data: text, directory: 'CACHE', encoding: 'utf8' });
+      await Share.share({ title: name, files: [uri] });
+      return true;
+    } catch (e) {
+      if (/cancel/i.test(String(e?.message || e))) return false;
+      toast('Could not save ' + name); return false;
+    }
+  }
   // Phones: open the share sheet, which offers "Save to Files", Drive, WhatsApp...
   const file = typeof File === 'function' ? new File([text], name, { type: mime }) : null;
   if (file && navigator.canShare?.({ files: [file] }) && matchMedia('(hover: none)').matches) {
@@ -1131,7 +1145,7 @@ function bindSettings(root) {
   };
   $('#reset', root).onclick = () => confirmBox('Erase all data?', 'Every transaction, budget, goal and setting will be deleted from this computer. Save a backup first if you might want it back.', 'Erase everything', () => { state = defaultState(); save(); ui.view = 'dashboard'; render(); });
   if (hasApi()) window.pywebview.api.data_location().then((p) => { const el = $('#dataLoc'); if (el) el.textContent = 'Saved automatically to ' + p; });
-  else $('#dataLoc', root).textContent = 'Saved automatically in this browser.';
+  else $('#dataLoc', root).textContent = isNativeApp() ? 'Saved automatically on this phone.' : 'Saved automatically in this browser.';
   $$('[data-cat-add]', root).forEach((b) => b.onclick = () => catForm({}, b.dataset.catAdd));
   $$('[data-cat-edit]', root).forEach((b) => b.onclick = () => catForm(cat(b.dataset.catEdit)));
   $$('[data-cat-del]', root).forEach((b) => b.onclick = () => {
@@ -1164,7 +1178,7 @@ function showUpdateBanner() {
   $('#updNow').onclick = () => setTimeout(() => location.reload(), 250);
   $('#updLater').onclick = () => el.remove();
 }
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && !isNativeApp()) {
   // A brand-new install also "changes controller", so only count it if one was running before.
   const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('message', (e) => { if (e.data?.type === 'update-ready') showUpdateBanner(); });
