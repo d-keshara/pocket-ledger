@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pocket Ledger Privacy Policy</title>
+<meta name="description" content="Privacy policy for the Pocket Ledger money tracker app.">
+<meta name="theme-color" content="#12302a">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f3f5f4; --surface: #ffffff; --ink: #15211d; --ink-2: #4d5a55; --line: #dce3df;
+    --accent: #0f6b5c; --accent-soft: #d9ece7; --side: #12302a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0e1412; --surface: #161f1c; --ink: #e8f0ec; --ink-2: #a8b5b0; --line: #2a3632;
+      --accent: #3fb59c; --accent-soft: #173a33; --side: #0a1916;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0e1412; --surface: #161f1c; --ink: #e8f0ec; --ink-2: #a8b5b0; --line: #2a3632;
+    --accent: #3fb59c; --accent-soft: #173a33; --side: #0a1916;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.65 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header { background: var(--side); color: #cfe3dc; padding: 40px 16px 32px; }
+  header .wrap { display: flex; align-items: center; gap: 14px; }
+  header svg { width: 48px; height: 48px; flex: none; }
+  header h1 { margin: 0; color: #fff; font-weight: 500; font-size: 26px; line-height: 1.2; }
+  header p { margin: 2px 0 0; font-size: 14px; opacity: .8; }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  main { padding: 28px 16px 56px; }
+  .summary {
+    background: var(--accent-soft); border-radius: 14px; padding: 16px 18px; margin-bottom: 28px;
+  }
+  .summary strong { color: var(--accent); }
+  .summary ul { margin: 8px 0 0; padding-left: 20px; }
+  h2 { font-size: 19px; font-weight: 600; margin: 32px 0 6px; }
+  p, li { color: var(--ink-2); }
+  p { margin: 0 0 12px; }
+  ul { padding-left: 20px; margin: 0 0 12px; }
+  li { margin-bottom: 6px; }
+  b { color: var(--ink); font-weight: 600; }
+  a { color: var(--accent); }
+  footer { border-top: 1px solid var(--line); margin-top: 40px; padding-top: 16px; font-size: 14px; color: var(--ink-2); }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="6" width="28" height="20" rx="5" fill="#5fd3b8"/><rect x="2" y="11" width="28" height="4" fill="#12302a" opacity=".35"/><rect x="18" y="17" width="12" height="7" rx="3.5" fill="#12302a"/><circle cx="22" cy="20.5" r="1.6" fill="#5fd3b8"/></svg>
+    <div>
+      <h1>Privacy Policy</h1>
+      <p>Pocket Ledger · Effective 12 October 2026</p>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="summary">
+    <strong>In short: your money data stays on your device.</strong>
+    <ul>
+      <li>No account, no sign-in.</li>
+      <li>We do not collect, store, sell or share any of your information.</li>
+      <li>No ads, no analytics, no tracking.</li>
+      <li>The Android app does not have permission to use the internet.</li>
+    </ul>
+  </div>
+
+  <p>This policy explains how Pocket Ledger (“the app”), developed by D. Kezara, handles your information. It covers the Android app, the Windows app and the web version at d-keshara.github.io/pocket-ledger.</p>
+
+  <h2>Information you enter</h2>
+  <p>Pocket Ledger lets you record things like transactions, amounts, categories, accounts, budgets, savings goals, scheduled payments, your name (used only for the greeting) and your settings.</p>
+  <p>All of this is stored <b>only on your own device</b>:</p>
+  <ul>
+    <li><b>Android app:</b> in the app’s private storage on your phone.</li>
+    <li><b>Windows app:</b> in a file in your user folder (%APPDATA%\PocketLedger).</li>
+    <li><b>Web version:</b> in your browser’s local storage.</li>
+  </ul>
+  <p>This information is never sent to us or to anyone else. We have no server that receives it, and we cannot see it.</p>
+
+  <h2>Information we collect</h2>
+  <p>None. The app contains no analytics, advertising, crash-reporting or tracking tools, and it does not collect device identifiers, location, contacts or any other personal data.</p>
+
+  <h2>Backups and CSV exports</h2>
+  <p>You can choose to save a backup file or export your transactions as a CSV file. These files are created only when you ask for them, and you decide where they go (for example your phone’s storage, Google Drive, or a message to yourself). Once you save or share a file somewhere, that place’s own privacy policy applies to it.</p>
+  <p>When you restore a backup, the app reads only the file you pick.</p>
+
+  <h2>Permissions</h2>
+  <p>The Android app asks for no special permissions. It does not request internet access, so it cannot send your data anywhere. When you save a backup or export, Android’s own share menu lets you pick where the file goes.</p>
+
+  <h2>Web version and hosting</h2>
+  <p>The web version is hosted on GitHub Pages. When you open it, your browser downloads the app’s files from GitHub, which may keep standard technical logs such as IP addresses (see <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub’s privacy statement</a>). The app itself sends nothing back, and once loaded it works offline.</p>
+
+  <h2>Deleting your data</h2>
+  <p>You are always in control. You can delete everything at any time with <b>Settings → Erase all data</b> in the app. Uninstalling the Android app, or clearing your browser’s site data for the web version, also removes it.</p>
+
+  <h2>Children</h2>
+  <p>Pocket Ledger is a general personal finance tool and is not directed at children under 13. Since the app collects no data, it collects none from children either.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If this policy changes, the new version will be published on this page with a new effective date. If the app ever starts handling data differently, this page will say so before that version is released.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy or the app? Open an issue at <a href="https://github.com/d-keshara/pocket-ledger/issues">github.com/d-keshara/pocket-ledger/issues</a>.</p>
+
+  <footer>© 2026 D. Kezara · Pocket Ledger</footer>
+</main>
+</body>
+</html>

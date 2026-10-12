@@ -459,4 +459,5 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Exercise 1: touch screens can't hover, so always show edit/delete */
 @media (hover: none) {
   .tx .row-actions { opacity: 1; }
+  .shortcuts-hint { display: none; } /* keyboard shortcuts mean nothing without a keyboard */
 }

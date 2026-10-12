@@ -989,7 +989,7 @@ function viewSettings() {
           <label class="field"><span>Currency</span><select class="input" id="sCur">${CURRENCIES.map(([c, sym]) => `<option value="${c}" ${s.currency === c ? 'selected' : ''}>${c} (${sym})</option>`).join('')}</select></label>
           <label class="field"><span>Symbol shown</span><input class="input" id="sSym" value="${esc(s.symbol)}" maxlength="5"></label>
           <label class="field"><span>Week starts on</span><select class="input" id="sWeek">${[1, 0, 6].map((d) => `<option value="${d}" ${s.weekStart === d ? 'selected' : ''}>${['Sunday', 'Monday', '', '', '', '', 'Saturday'][d]}</option>`).join('')}</select></label>
-          <label class="field"><span>Appearance</span><select class="input" id="sTheme">${[['system', 'Match Windows'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => `<option value="${v}" ${s.theme === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+          <label class="field"><span>Appearance</span><select class="input" id="sTheme">${[['system', isNativeApp() ? 'Match phone' : 'Match Windows'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => `<option value="${v}" ${s.theme === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         </div>
         <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="sDec" ${s.decimals ? 'checked' : ''}> Show cents / decimals</label>
       </div></div>
@@ -999,7 +999,7 @@ function viewSettings() {
         <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="backup">${icon('download')}Save backup</button><button class="btn" id="restore">${icon('upload')}Restore backup</button><button class="btn" id="csvAll">${icon('download')}Export all as CSV</button></div>
         <p class="hint" id="dataLoc" style="margin:0"></p>
         <div style="border-top:1px solid var(--line);padding-top:14px"><button class="btn danger" id="reset">${icon('trash')}Erase all data</button></div>
-        <p class="hint" style="margin:0">Shortcuts: N new expense · I new income · Esc close</p>
+        <p class="hint shortcuts-hint" style="margin:0">Shortcuts: N new expense · I new income · Esc close</p>
       </div></div>
     </div>
     <div class="cols">
@@ -1031,7 +1031,17 @@ function catForm(c = {}, type) {
 function applyTheme() {
   const t = state?.settings.theme || 'system';
   if (t === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+  updateSystemBars();
 }
+/* Android app: light status-bar icons on dark screens (splash, dark theme), dark icons on light ones. */
+const darkScheme = window.matchMedia?.('(prefers-color-scheme: dark)');
+function updateSystemBars() {
+  if (!isNativeApp()) return;
+  const t = state?.settings.theme || 'system';
+  const dark = !!document.getElementById('splash') || t === 'dark' || (t === 'system' && !!darkScheme?.matches);
+  window.Capacitor.Plugins.SystemBars?.setStyle({ style: dark ? 'DARK' : 'LIGHT' }).catch(() => {});
+}
+darkScheme?.addEventListener?.('change', updateSystemBars);
 
 /* ================= onboarding ================= */
 function viewWelcome() {
@@ -1200,7 +1210,7 @@ if (splashVersion) splashVersion.textContent = `Version ${APP_VERSION}`;
 function hideSplash() {
   const el = document.getElementById('splash'); if (!el) return;
   const wait = Math.max(0, SPLASH_MIN_MS - performance.now()); // performance.now() = ms since the app opened
-  setTimeout(() => { el.classList.add('hide'); setTimeout(() => el.remove(), 450); }, wait);
+  setTimeout(() => { el.classList.add('hide'); setTimeout(() => { el.remove(); updateSystemBars(); }, 450); }, wait);
 }
 
 async function boot() {
