@@ -492,3 +492,80 @@ describe('splash and credit', () => {
     assert.match(doc.querySelector('.more-credit').textContent, /Designed & developed by D\. Kezara/);
   });
 });
+
+/* ------------------------------------------- 1.5.0: theme switch, numbers, fixes */
+describe('theme switch on the home page', () => {
+  test('tapping Dark switches the theme, remembers it and moves the pill', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    L.render();
+    const dark = doc.querySelector('.theme-toggle [data-theme-set="dark"]');
+    assert.equal(doc.querySelector('.theme-toggle [aria-checked="true"]').dataset.themeSet, 'system');
+    dark.click();
+    assert.equal(S.settings.theme, 'dark');
+    assert.equal(doc.documentElement.getAttribute('data-theme'), 'dark');
+    assert.equal(dark.getAttribute('aria-checked'), 'true');
+    assert.equal(doc.querySelector('.theme-toggle').style.getPropertyValue('--i'), '2');
+    doc.querySelector('.theme-toggle [data-theme-set="system"]').click();
+    assert.equal(doc.documentElement.hasAttribute('data-theme'), false);
+  });
+});
+
+describe('highlighted amounts', () => {
+  test('big amounts split symbol, digits and cents', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    S.settings.weeklyBudget = 7000;
+    L.render();
+    const big = doc.querySelector('.runway-lead .big');
+    assert.equal(big.querySelector('.cur').textContent, 'Rs');
+    assert.equal(big.querySelector('.dec').textContent, '.00');
+    assert.match(big.textContent, /^Rs1,400\.00$/);
+  });
+
+  test('"same point last week" shows no sign when nothing changed', (t) => {
+    const { L, doc, close } = makeApp(); t.after(close);
+    L.render();
+    assert.doesNotMatch(doc.querySelector('.runway-note').textContent, /−/);
+  });
+});
+
+describe('1.5.0 bug fixes', () => {
+  test('a filter on a deleted category falls back to all categories', (t) => {
+    const { L, S, add, expenseCat, close } = makeApp(); t.after(close);
+    add({ type: 'expense', amount: 5, date: '2026-10-07', categoryId: expenseCat('Food').id });
+    Object.assign(L.ui.tx, { q: '', period: 'all', type: 'all', cat: 'gone', acc: 'gone-too' });
+    assert.equal(L.filteredTx().length, 1);
+    assert.equal(L.ui.tx.cat, 'all');
+    void S;
+  });
+
+  test('on the same day, the transaction added last is listed first', (t) => {
+    const { L, add, expenseCat, close } = makeApp(); t.after(close);
+    const food = expenseCat('Food').id;
+    add({ type: 'expense', amount: 1, date: '2026-10-07', categoryId: food });
+    add({ type: 'expense', amount: 2, date: '2026-10-07', categoryId: food });
+    add({ type: 'expense', amount: 3, date: '2026-10-06', categoryId: food });
+    Object.assign(L.ui.tx, { q: '', period: 'all', type: 'all', cat: 'all', acc: 'all' });
+    assert.deepEqual([...L.filteredTx().map((x) => x.amount)], [2, 1, 3]);
+  });
+
+  test('switching type in the scheduled-payment form and cancelling changes nothing', (t) => {
+    const { L, S, doc, cash, expenseCat, close } = makeApp(); t.after(close);
+    S.recurring.push({ id: 'r1', type: 'expense', amount: 900, note: 'Rent', categoryId: expenseCat('Rent').id, frequency: 'monthly', nextDate: '2026-10-31', anchorDay: 31, accountId: cash.id, active: true });
+    L.ui.view = 'recurring'; L.render();
+    doc.querySelector('[data-rec-edit="r1"]').click();
+    doc.querySelector('#rn').value = 'Changed';
+    doc.querySelector('#rtype [data-v="income"]').click();
+    doc.querySelector('[data-close]').click();
+    assert.equal(S.recurring[0].note, 'Rent');
+    assert.equal(S.recurring[0].type, 'expense');
+  });
+
+  test('saving a scheduled payment without changing its date keeps the 31st', (t) => {
+    const { L, S, doc, cash, expenseCat, close } = makeApp(); t.after(close);
+    S.recurring.push({ id: 'r1', type: 'expense', amount: 900, note: 'Rent', categoryId: expenseCat('Rent').id, frequency: 'monthly', nextDate: '2026-11-30', anchorDay: 31, accountId: cash.id, active: true });
+    L.ui.view = 'recurring'; L.render();
+    doc.querySelector('[data-rec-edit="r1"]').click();
+    doc.querySelector('#rs').click();
+    assert.equal(S.recurring[0].anchorDay, 31);
+  });
+});
