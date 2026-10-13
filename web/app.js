@@ -3,7 +3,7 @@
 'use strict';
 
 /* ================= constants ================= */
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.5.0';
 const AUTHOR = 'D. Kezara';
 const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948', '#5f6b66', '#0f6b5c'];
 const CURRENCIES = [
@@ -36,6 +36,9 @@ const ICONS = {
   play: '<path d="M7 4l13 8-13 8z"/>',
   minus: '<path d="M5 12h14"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+  auto: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/>',
 };
 const icon = (n) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
 
@@ -138,6 +141,18 @@ function money(n, opts = {}) {
   const sign = n < 0 ? '−' : (opts.sign && n > 0 ? '+' : '');
   return `${sign}${s.symbol} ${str}`;
 }
+/* Same as money(), as HTML for amounts that should stand out: the currency symbol and the cents
+   are drawn smaller so the main digits are what the eye reads first ("Rs 12,500.00"). */
+const NNBSP = ' '; // the narrow no-break space money() puts after the symbol
+function moneyHtml(n, opts = {}) {
+  const sym = state.settings.symbol; const s = money(n, opts); const at = s.indexOf(sym + NNBSP);
+  const sign = s.slice(0, at); const digits = s.slice(at + sym.length + 1);
+  const dot = opts.compact ? -1 : digits.indexOf('.');
+  const main = dot < 0 ? digits : digits.slice(0, dot);
+  return `<span class="money">${sign}<span class="cur">${esc(sym)}</span>${main}${dot < 0 ? '' : `<span class="dec">${digits.slice(dot)}</span>`}</span>`;
+}
+/* Newest date first; on the same day, the one added last comes first. */
+const newestFirst = (list) => [...list].reverse().sort((a, b) => b.date.localeCompare(a.date));
 const inRange = (t, from, to) => (!from || t.date >= from) && (!to || t.date <= to);
 const expensesIn = (from, to) => state.transactions.filter((t) => t.type === 'expense' && inRange(t, from, to));
 const incomeIn = (from, to) => state.transactions.filter((t) => t.type === 'income' && inRange(t, from, to));
@@ -306,12 +321,12 @@ function txRow(t) {
     const goalName = (id) => state.goals.find((g) => g.id === id)?.name || 'Goal';
     const from = t.fromGoalId ? goalName(t.fromGoalId) : (acc(t.accountId)?.name || 'Account');
     const to = t.goalId ? goalName(t.goalId) : (acc(t.toAccountId)?.name || 'Account');
-    title = t.note || 'Transfer'; sub = `${esc(from)} to ${esc(to)}`; glyphColor = '#5f6b66'; letter = '⇄'; amtCls = ''; amt = money(t.amount);
+    title = t.note || 'Transfer'; sub = `${esc(from)} to ${esc(to)}`; glyphColor = '#5f6b66'; letter = '⇄'; amtCls = ''; amt = moneyHtml(t.amount);
   } else {
     title = t.note || c?.name || 'Uncategorised';
     sub = `${esc(c?.name || 'Uncategorised')} · ${esc(acc(t.accountId)?.name || '')}`;
     glyphColor = c?.color || '#5f6b66'; letter = (c?.name || '?')[0];
-    amtCls = t.type === 'income' ? 'pos' : ''; amt = money(t.type === 'income' ? t.amount : -t.amount, { sign: true });
+    amtCls = t.type === 'income' ? 'pos' : ''; amt = moneyHtml(t.type === 'income' ? t.amount : -t.amount, { sign: true });
   }
   return `<div class="tx">
     <div class="glyph" style="background:${glyphColor}">${esc(letter)}</div>
@@ -473,7 +488,7 @@ function hbars(rows, total) {
   return `<div class="hbars">${rows.map((r) => `<div class="hbar" data-tip="${esc(`${esc(r.name)}<br><b>${esc(money(r.v))}</b> · ${total ? Math.round(r.v / total * 100) : 0}% of spending${r.n ? `<br>${r.n} transaction${r.n > 1 ? 's' : ''}` : ''}`)}">
     <div class="lbl"><i class="dot" style="background:${r.color}"></i>${esc(r.name)}</div>
     <div class="track"><i style="width:${(r.v / max) * 100}%"></i></div>
-    <div class="v">${money(r.v, { short: true })}<small>${total ? Math.round(r.v / total * 100) : 0}%</small></div></div>`).join('')}</div>`;
+    <div class="v">${moneyHtml(r.v, { short: true })}<small>${total ? Math.round(r.v / total * 100) : 0}%</small></div></div>`).join('')}</div>`;
 }
 function categoryRows(list) {
   const by = {};
@@ -512,14 +527,14 @@ function viewDashboard() {
 
   let lead;
   if (!w.B) {
-    lead = `<div class="runway-lead"><div class="label">Spent this week</div><div class="big">${money(w.spent)}</div>
+    lead = `<div class="runway-lead"><div class="label">Spent this week</div><div class="big">${moneyHtml(w.spent)}</div>
       <p class="sub">Set a weekly limit and you'll see how much you can safely spend each day, so money lasts until the week ends.</p>
       <button class="btn primary" id="setBudget">${icon('target')}Set weekly limit</button></div>`;
   } else {
     const over = w.leftToday < 0; const ratio = w.spent / w.B;
     lead = `<div class="runway-lead">
       <div class="label">${over ? 'Over today’s share by' : 'You can spend today'}</div>
-      <div class="big ${over ? 'over' : ''}">${money(Math.abs(w.leftToday))}</div>
+      <div class="big ${over ? 'over' : ''}">${moneyHtml(Math.abs(w.leftToday))}</div>
       <p class="sub">${w.remaining >= 0 ? `${money(w.remaining)} left of ${money(w.B)} this week` : `${money(-w.remaining)} over this week’s ${money(w.B)} limit`}</p>
       <div class="tank ${ratio > 1 ? 'over' : ratio > .8 ? 'warn' : ''}"><i style="width:${clamp(100 - ratio * 100, 0, 100)}%"></i></div>
       <div class="tank-legend"><span>${w.daysLeft} day${w.daysLeft > 1 ? 's' : ''} to go</span><span>${Math.round(clamp(1 - ratio, 0, 1) * 100)}% left</span></div>
@@ -534,14 +549,14 @@ function viewDashboard() {
     const over = w.B && d.spent > allowance + 0.001;
     const tipTxt = `${fmtDate(d.date, { full: true })}<br>${future ? `Plan up to <b>${esc(money(allowance))}</b>` : `Spent <b>${esc(money(d.spent))}</b>${w.B ? `<br>Daily share ${esc(money(allowance))}` : ''}`}`;
     return `<div class="day ${future ? 'future' : ''} ${isToday ? 'today' : ''}" data-tip="${esc(tipTxt)}">
-      <div class="amt">${future ? (w.B ? money(allowance, { short: true }) : '') : money(d.spent, { short: true })}</div>
+      <div class="amt">${future ? (w.B ? moneyHtml(allowance, { short: true }) : '') : moneyHtml(d.spent, { short: true })}</div>
       <div class="col">${future ? '' : `<div class="fill ${over ? 'over' : ''}" style="height:${h}%"></div>`}${w.B ? `<div class="allow" style="bottom:${ah}%"></div>` : ''}</div>
       <div class="dn">${isToday ? 'Today' : DAY_SHORT[dt.getDay()]}</div></div>`;
   }).join('');
   const diff = w.spent - lastWSamePoint;
   const notes = `<div class="runway-note">
-    <span>At this pace the week ends at <b>${money(projected)}</b>${w.B ? (projected > w.B ? ` <span class="neg">(${money(projected - w.B)} over)</span>` : ' <span class="pos">(within limit)</span>') : ''}</span>
-    <span>Same point last week <b>${money(lastWSamePoint)}</b> ${lastWSamePoint || w.spent ? `<span class="${diff > 0 ? 'neg' : 'pos'}">${diff > 0 ? '+' : '−'}${money(Math.abs(diff)).replace('−', '')}</span>` : ''}</span>
+    <span>At this pace the week ends at <b>${moneyHtml(projected)}</b>${w.B ? (projected > w.B ? ` <span class="neg">(${money(projected - w.B)} over)</span>` : ' <span class="pos">(within limit)</span>') : ''}</span>
+    <span>Same point last week <b>${moneyHtml(lastWSamePoint)}</b> ${round2(diff) ? `<span class="${diff > 0 ? 'neg' : 'pos'}">${money(diff, { sign: true })}</span>` : ''}</span>
     <span>No-spend days <b>${noSpend}</b></span>
   </div>`;
 
@@ -550,20 +565,21 @@ function viewDashboard() {
   const alertHtml = alerts.length ? `<div class="alert ${alerts.some((a) => a.ratio > 1) ? 'over' : 'warn'}">${icon('alert')}<div>${alerts.map((a) => `<b>${esc(a.name)}</b> ${a.ratio > 1 ? `is ${money(a.spent - a.amount)} over its ${a.period} budget` : `has ${money(a.amount - a.spent)} left this ${a.period === 'weekly' ? 'week' : 'month'}`}`).join(' · ')}</div></div>` : '';
 
   const weekEx = expensesIn(w.start, w.end);
-  const recent = [...state.transactions].sort((a, b) => b.date.localeCompare(a.date) || 0).slice(0, 7);
+  const recent = newestFirst(state.transactions).slice(0, 7);
   const upcoming = state.recurring.filter((r) => r.active && r.nextDate <= addDays(t, 14)).sort((a, b) => a.nextDate.localeCompare(b.nextDate)).slice(0, 5);
   const saved = mInc - mExp;
 
-  return `<div class="head"><div><h1>${esc(greeting())}</h1><p>${fmtDate(t, { full: true })} · week of ${fmtDate(w.start, { full: true, noDay: true })} – ${fmtDate(w.end, { full: true, noDay: true })}</p></div>
+  return `<div class="head home-head"><div class="head-title"><h1>${esc(greeting())}</h1><p>${fmtDate(t, { full: true })} · week of ${fmtDate(w.start, { full: true, noDay: true })} – ${fmtDate(w.end, { full: true, noDay: true })}</p></div>
+    ${themeToggle()}
     <div class="actions"><button class="btn" data-add="income">${icon('plus')}Income</button><button class="btn primary" data-add="expense">${icon('plus')}Expense</button></div></div>
     <section class="runway" aria-label="This week">${lead}<div class="days">${daysHtml}</div>${notes}</section>
     ${alertHtml}
     ${backupCard()}
     <div class="stats">
-      <div class="stat"><div class="k">Total balance</div><div class="v">${money(totalBalance())}</div><div class="d">${state.accounts.length} account${state.accounts.length === 1 ? '' : 's'}</div></div>
-      <div class="stat"><div class="k">Income in ${MONTH_SHORT[now().getMonth()]}</div><div class="v pos">${money(mInc)}</div><div class="d">${plural(incomeIn(mFrom, mTo).length, 'payment')}</div></div>
-      <div class="stat"><div class="k">Spent in ${MONTH_SHORT[now().getMonth()]}</div><div class="v">${money(mExp)}</div><div class="d">${money(mExp / Math.max(1, parseISO(t).getDate()), { short: true })} a day on average</div></div>
-      <div class="stat"><div class="k">Kept this month</div><div class="v ${saved < 0 ? 'neg' : ''}">${money(saved)}</div><div class="d">${mInc ? Math.round(saved / mInc * 100) + '% of income' : 'Add income to see your savings rate'}</div></div>
+      <div class="stat"><div class="k">Total balance</div><div class="v">${moneyHtml(totalBalance())}</div><div class="d">${state.accounts.length} account${state.accounts.length === 1 ? '' : 's'}</div></div>
+      <div class="stat"><div class="k">Income in ${MONTH_SHORT[now().getMonth()]}</div><div class="v pos">${moneyHtml(mInc)}</div><div class="d">${plural(incomeIn(mFrom, mTo).length, 'payment')}</div></div>
+      <div class="stat"><div class="k">Spent in ${MONTH_SHORT[now().getMonth()]}</div><div class="v">${moneyHtml(mExp)}</div><div class="d">${money(mExp / Math.max(1, parseISO(t).getDate()), { short: true })} a day on average</div></div>
+      <div class="stat"><div class="k">Kept this month</div><div class="v ${saved < 0 ? 'neg' : ''}">${moneyHtml(saved)}</div><div class="d">${mInc ? Math.round(saved / mInc * 100) + '% of income' : 'Add income to see your savings rate'}</div></div>
     </div>
     <div class="cols">
       <div class="panel"><h2>Where this week’s money went <small>${money(sum(weekEx, (x) => x.amount))}</small></h2>
@@ -574,7 +590,7 @@ function viewDashboard() {
     <div class="cols">
       <div class="panel"><h2>Budgets <button class="btn small ghost" data-go="budgets">Manage</button></h2>${budgetMeters(4) || empty('target', 'No category budgets', 'Cap the categories that drain you most, like eating out.', `<button class="btn" data-go="budgets">Create a budget</button>`)}</div>
       <div class="panel"><h2>Coming up <button class="btn small ghost" data-go="recurring">Manage</button></h2>
-        ${upcoming.length ? `<div class="tx-list">${upcoming.map((r) => `<div class="tx"><div class="glyph" style="background:${cat(r.categoryId)?.color || '#5f6b66'}">${esc(catName(r.categoryId)[0])}</div><div style="min-width:0"><div class="t1">${esc(r.note || catName(r.categoryId))}</div><div class="t2">${fmtDate(r.nextDate)} · ${FREQ[r.frequency]}</div></div><div class="amt ${r.type === 'income' ? 'pos' : ''}">${money(r.type === 'income' ? r.amount : -r.amount, { sign: true })}</div><div></div></div>`).join('')}</div>`
+        ${upcoming.length ? `<div class="tx-list">${upcoming.map((r) => `<div class="tx"><div class="glyph" style="background:${cat(r.categoryId)?.color || '#5f6b66'}">${esc(catName(r.categoryId)[0])}</div><div style="min-width:0"><div class="t1">${esc(r.note || catName(r.categoryId))}</div><div class="t2">${fmtDate(r.nextDate)} · ${FREQ[r.frequency]}</div></div><div class="amt ${r.type === 'income' ? 'pos' : ''}">${moneyHtml(r.type === 'income' ? r.amount : -r.amount, { sign: true })}</div><div></div></div>`).join('')}</div>`
         : empty('repeat', 'Nothing scheduled', 'Add salary, rent or subscriptions once and they’ll be logged automatically.', `<button class="btn" data-go="recurring">Schedule a payment</button>`)}</div>
     </div>`;
 }
@@ -603,13 +619,14 @@ function periodRange(p, from, to) {
   }
 }
 function filteredTx() {
-  const f = ui.tx; const [from, to] = periodRange(f.period, f.from, f.to); const q = f.q.trim().toLowerCase();
-  return state.transactions.filter((t) => inRange(t, from, to)
+  const f = ui.tx;
+  if (f.cat !== 'all' && !cat(f.cat)) f.cat = 'all';
+  if (f.acc !== 'all' && !acc(f.acc)) f.acc = 'all'; const [from, to] = periodRange(f.period, f.from, f.to); const q = f.q.trim().toLowerCase();
+  return newestFirst(state.transactions.filter((t) => inRange(t, from, to)
     && (f.type === 'all' || t.type === f.type)
     && (f.cat === 'all' || t.categoryId === f.cat)
     && (f.acc === 'all' || t.accountId === f.acc || t.toAccountId === f.acc)
-    && (!q || (t.note || '').toLowerCase().includes(q) || catName(t.categoryId).toLowerCase().includes(q) || String(t.amount).includes(q)))
-    .sort((a, b) => b.date.localeCompare(a.date));
+    && (!q || (t.note || '').toLowerCase().includes(q) || catName(t.categoryId).toLowerCase().includes(q) || String(t.amount).includes(q))));
 }
 function viewTransactions() {
   const f = ui.tx; const list = filteredTx();
@@ -626,7 +643,7 @@ function viewTransactions() {
         <select class="input" id="fcat"><option value="all">All categories</option>${state.categories.map((c) => `<option value="${c.id}" ${f.cat === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
         <select class="input" id="facc"><option value="all">All accounts</option>${accOptions(f.acc)}</select>
       </div>
-      <div class="summary-bar"><span>Income <b class="pos">${money(inc)}</b></span><span>Expenses <b>${money(ex)}</b></span><span>Net <b class="${inc - ex < 0 ? 'neg' : ''}">${money(inc - ex, { sign: true })}</b></span><span>${list.length} transaction${list.length === 1 ? '' : 's'}</span></div>
+      <div class="summary-bar"><span>Income <b class="pos">${moneyHtml(inc)}</b></span><span>Expenses <b>${moneyHtml(ex)}</b></span><span>Net <b class="${inc - ex < 0 ? 'neg' : ''}">${moneyHtml(inc - ex, { sign: true })}</b></span><span>${list.length} transaction${list.length === 1 ? '' : 's'}</span></div>
       ${list.length ? txListGrouped(list) : empty('search', state.transactions.length ? 'No matches' : 'No transactions yet', state.transactions.length ? 'Try a different period or clear the search.' : 'Add income and expenses to start tracking.', state.transactions.length ? '' : `<button class="btn primary" data-add="expense">${icon('plus')}Add expense</button>`)}
     </div>`;
 }
@@ -798,7 +815,7 @@ function viewGoals() {
       plan = days > 0 ? `Save ${money(left / Math.max(1, days / 7), { short: true })} a week to reach it by ${fmtDate(g.deadline, { full: true, noDay: true })}` : `<span class="neg">Deadline passed, ${money(left)} to go</span>`;
     } else plan = `${money(left)} to go`;
     return `<div class="card"><div class="top"><div><h3>${esc(g.name)}</h3><div class="meta">Target ${money(g.target)}</div></div>${ring(pct)}</div>
-      <div class="big">${money(g.saved)}</div><div class="meta">${plan}</div>
+      <div class="big">${moneyHtml(g.saved)}</div><div class="meta">${plan}</div>
       <div class="foot"><button class="btn small primary" data-goal-add="${g.id}">${icon('plus')}Add money</button><button class="btn small" data-goal-take="${g.id}">${icon('minus')}Take out</button>
       <button class="icon-btn" data-goal-edit="${g.id}" aria-label="Edit goal" style="margin-left:auto">${icon('edit')}</button><button class="icon-btn" data-goal-del="${g.id}" aria-label="Delete goal">${icon('trash')}</button></div></div>`;
   }).join('');
@@ -855,15 +872,16 @@ function viewRecurring() {
   const monthlyCost = sum(list.filter((r) => r.active && r.type === 'expense'), (r) => r.amount * ({ daily: 30.4, weekly: 4.35, biweekly: 2.17, monthly: 1, yearly: 1 / 12 }[r.frequency]));
   return `<div class="head"><div><h1>Scheduled payments</h1><p>Salary, rent, subscriptions: set them once and they’re logged on the day they’re due.</p></div>
     <div class="actions"><button class="btn primary" id="addRec">${icon('plus')}Schedule a payment</button></div></div>
-    <div class="panel">${list.length ? `<p class="hint" style="margin:0 0 6px">Scheduled expenses cost about <b class="num" style="font-size:15px;color:var(--ink)">${money(monthlyCost)}</b> a month.</p>
+    <div class="panel">${list.length ? `<p class="hint" style="margin:0 0 6px">Scheduled expenses cost about <b class="head-total">${moneyHtml(monthlyCost)}</b> a month.</p>
     <table class="table rec-table"><thead><tr><th>Name</th><th>Category</th><th>Repeats</th><th>Next</th><th class="r">Amount</th><th></th></tr></thead><tbody>
     ${list.map((r) => `<tr style="${r.active ? '' : 'opacity:.5'}"><td><b>${esc(r.note || catName(r.categoryId))}</b><div class="muted" style="font-size:12.5px">${esc(acc(r.accountId)?.name || '')}<span class="phone-only"> · ${FREQ[r.frequency]}</span></div></td>
       <td><i class="dot" style="background:${cat(r.categoryId)?.color}"></i> ${esc(catName(r.categoryId))}</td><td>${FREQ[r.frequency]}</td><td>${r.active ? fmtDate(r.nextDate) : 'Paused'}</td>
-      <td class="r num ${r.type === 'income' ? 'pos' : ''}" style="font-size:15px">${money(r.type === 'income' ? r.amount : -r.amount, { sign: true })}</td>
+      <td class="r amt-cell ${r.type === 'income' ? 'pos' : ''}">${moneyHtml(r.type === 'income' ? r.amount : -r.amount, { sign: true })}</td>
       <td class="r" style="white-space:nowrap"><button class="icon-btn" data-rec-toggle="${r.id}" aria-label="${r.active ? 'Pause' : 'Resume'}" data-tip="${r.active ? 'Pause' : 'Resume'}">${icon(r.active ? 'pause' : 'play')}</button><button class="icon-btn" data-rec-edit="${r.id}" aria-label="Edit">${icon('edit')}</button><button class="icon-btn" data-rec-del="${r.id}" aria-label="Delete">${icon('trash')}</button></td></tr>`).join('')}
     </tbody></table>` : empty('repeat', 'Nothing scheduled', 'Add your salary and regular bills so you never forget to log them.', `<button class="btn primary" id="addRec2">${icon('plus')}Schedule a payment</button>`)}</div>`;
 }
-function recForm(r = {}) {
+function recForm(saved = {}) {
+  const r = { ...saved }; // a copy: switching type must not change the real payment until Save
   let type = r.type || 'expense';
   const body = () => `<div class="stack"><div class="seg type" id="rtype">${['expense', 'income'].map((v) => `<button type="button" data-v="${v}" class="${v === type ? 'on' : ''}">${v[0].toUpperCase() + v.slice(1)}</button>`).join('')}</div>
     <label class="field"><span>Name</span><input class="input" id="rn" value="${esc(r.note || '')}" placeholder="${type === 'income' ? 'e.g. Salary' : 'e.g. Netflix, Rent'}" autofocus maxlength="60"></label>
@@ -883,7 +901,7 @@ function recForm(r = {}) {
         const amount = round2(parseFloat($('#ra', m).value));
         if (!(amount > 0)) return toast('Enter an amount greater than zero');
         const nextDate = $('#rd', m).value || today();
-        const rec = { type, amount, note: $('#rn', m).value.trim(), categoryId: $('#rc', m).value, frequency: $('#rf', m).value, nextDate, anchorDay: parseISO(nextDate).getDate(), accountId: $('#racc', m).value };
+        const rec = { type, amount, note: $('#rn', m).value.trim(), categoryId: $('#rc', m).value, frequency: $('#rf', m).value, nextDate, anchorDay: r.id && nextDate === r.nextDate && r.anchorDay ? r.anchorDay : parseISO(nextDate).getDate(), accountId: $('#racc', m).value };
         if (r.id) Object.assign(state.recurring.find((x) => x.id === r.id), rec); else state.recurring.push({ id: uid(), active: true, ...rec });
         postDueRecurring(); save(); closeModal(); render(); toast('Scheduled payment saved');
       };
@@ -930,10 +948,10 @@ function viewReports() {
   return `<div class="head"><div><h1>Reports</h1><p>${fmtDate(from, { full: true, noDay: true })} – ${fmtDate(to, { full: true, noDay: true })}</p></div>
     <div class="seg" id="rp">${periods.map(([v, l]) => `<button data-v="${v}" class="${p === v ? 'on' : ''}">${l}</button>`).join('')}</div></div>
     <div class="stats" style="margin-top:0">
-      <div class="stat"><div class="k">Income</div><div class="v pos">${money(tIn)}</div><div class="d">${plural(inc.length, 'payment')}</div></div>
-      <div class="stat"><div class="k">Expenses</div><div class="v">${money(tEx)}</div><div class="d">${plural(ex.length, 'purchase')}</div></div>
-      <div class="stat"><div class="k">Kept</div><div class="v ${tIn - tEx < 0 ? 'neg' : ''}">${money(tIn - tEx)}</div><div class="d">${tIn ? Math.round((tIn - tEx) / tIn * 100) + '% savings rate' : 'No income in this period'}</div></div>
-      <div class="stat"><div class="k">Average day</div><div class="v">${money(tEx / days, { short: true })}</div><div class="d">across ${days} day${days > 1 ? 's' : ''}</div></div>
+      <div class="stat"><div class="k">Income</div><div class="v pos">${moneyHtml(tIn)}</div><div class="d">${plural(inc.length, 'payment')}</div></div>
+      <div class="stat"><div class="k">Expenses</div><div class="v">${moneyHtml(tEx)}</div><div class="d">${plural(ex.length, 'purchase')}</div></div>
+      <div class="stat"><div class="k">Kept</div><div class="v ${tIn - tEx < 0 ? 'neg' : ''}">${moneyHtml(tIn - tEx)}</div><div class="d">${tIn ? Math.round((tIn - tEx) / tIn * 100) + '% savings rate' : 'No income in this period'}</div></div>
+      <div class="stat"><div class="k">Average day</div><div class="v">${moneyHtml(tEx / days, { short: true })}</div><div class="d">across ${days} day${days > 1 ? 's' : ''}</div></div>
     </div>
     <div class="cols">
       <div class="panel"><h2>Income and expenses by month</h2><div class="legend"><span><i style="background:var(--good)"></i>Income</span><span><i style="background:var(--danger)"></i>Expenses</span></div>${barChart(monthGroups)}</div>
@@ -942,18 +960,18 @@ function viewReports() {
     ${daily}
     <div class="cols">
       <div class="panel"><h2>Which days cost you most <small>${ex.length ? `${DAY_SHORT[peak]} is your priciest day` : ''}</small></h2>${barChart(wdGroups, { height: 190 })}<p class="hint" style="margin-top:8px">Average spent on each weekday in this period.</p></div>
-      <div class="panel"><h2>Biggest expenses</h2>${top.length ? `<table class="table"><tbody>${top.map((x) => `<tr><td>${esc(x.note || catName(x.categoryId))}<div class="muted" style="font-size:12.5px">${esc(catName(x.categoryId))} · ${fmtDate(x.date, { full: true })}</div></td><td class="r num" style="font-size:15px">${money(x.amount)}</td></tr>`).join('')}</tbody></table>` : empty('list', 'No expenses', 'Nothing was spent in this period.')}</div>
+      <div class="panel"><h2>Biggest expenses</h2>${top.length ? `<table class="table"><tbody>${top.map((x) => `<tr><td>${esc(x.note || catName(x.categoryId))}<div class="muted" style="font-size:12.5px">${esc(catName(x.categoryId))} · ${fmtDate(x.date, { full: true })}</div></td><td class="r amt-cell">${moneyHtml(x.amount)}</td></tr>`).join('')}</tbody></table>` : empty('list', 'No expenses', 'Nothing was spent in this period.')}</div>
     </div>`;
 }
 
 /* ---------- accounts ---------- */
 function viewAccounts() {
-  return `<div class="head"><div><h1>Accounts</h1><p>Total across all accounts: <b class="num" style="font-size:17px;color:var(--ink)">${money(totalBalance())}</b></p></div>
+  return `<div class="head"><div><h1>Accounts</h1><p>Total across all accounts: <b class="head-total">${moneyHtml(totalBalance())}</b></p></div>
     <div class="actions"><button class="btn" id="transfer">${icon('swap')}Move money</button><button class="btn primary" id="addAcc">${icon('plus')}New account</button></div></div>
     <div class="cards">${state.accounts.map((a) => { const n = state.transactions.filter((t) => t.accountId === a.id || t.toAccountId === a.id).length; const b = accountBalance(a);
       return `<div class="card"><div class="top"><div style="display:flex;gap:10px;align-items:center"><i class="dot" style="background:${a.color};width:12px;height:12px"></i><h3>${esc(a.name)}</h3></div>
       <div><button class="icon-btn" data-acc-edit="${a.id}" aria-label="Edit">${icon('edit')}</button><button class="icon-btn" data-acc-del="${a.id}" aria-label="Delete">${icon('trash')}</button></div></div>
-      <div class="big ${b < 0 ? 'neg' : ''}">${money(b)}</div><div class="meta">${n} transaction${n === 1 ? '' : 's'} · started at ${money(+a.initial || 0)}</div></div>`; }).join('')}</div>
+      <div class="big ${b < 0 ? 'neg' : ''}">${moneyHtml(b)}</div><div class="meta">${n} transaction${n === 1 ? '' : 's'} · started at ${money(+a.initial || 0)}</div></div>`; }).join('')}</div>
     ${state.accounts.length ? '' : `<div class="panel">${empty('wallet', 'No accounts', 'Add where your money lives: cash, bank, card or mobile wallet.')}</div>`}`;
 }
 function accForm(a = {}) {
@@ -989,7 +1007,7 @@ function viewSettings() {
           <label class="field"><span>Currency</span><select class="input" id="sCur">${CURRENCIES.map(([c, sym]) => `<option value="${c}" ${s.currency === c ? 'selected' : ''}>${c} (${sym})</option>`).join('')}</select></label>
           <label class="field"><span>Symbol shown</span><input class="input" id="sSym" value="${esc(s.symbol)}" maxlength="5"></label>
           <label class="field"><span>Week starts on</span><select class="input" id="sWeek">${[1, 0, 6].map((d) => `<option value="${d}" ${s.weekStart === d ? 'selected' : ''}>${['Sunday', 'Monday', '', '', '', '', 'Saturday'][d]}</option>`).join('')}</select></label>
-          <label class="field"><span>Appearance</span><select class="input" id="sTheme">${[['system', isNativeApp() ? 'Match phone' : 'Match Windows'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => `<option value="${v}" ${s.theme === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+          <label class="field"><span>Appearance</span><select class="input" id="sTheme">${[['system', systemLabel()], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => `<option value="${v}" ${s.theme === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         </div>
         <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="sDec" ${s.decimals ? 'checked' : ''}> Show cents / decimals</label>
       </div></div>
@@ -1027,6 +1045,28 @@ function catForm(c = {}, type) {
       save(); closeModal(); render(); toast('Category saved');
     }; },
   });
+}
+/* "system" means: follow the phone / computer setting. */
+const systemLabel = () => (isNativeApp() ? 'Match phone' : hasApi() ? 'Match Windows' : 'Match device');
+const THEMES = () => [['light', 'Light', 'sun'], ['system', systemLabel(), 'auto'], ['dark', 'Dark', 'moon']];
+/* Light / Auto / Dark switch. The sliding pill (.thumb) moves to the chosen button via --i. */
+function themeToggle() {
+  const cur = state.settings.theme || 'system';
+  const i = Math.max(0, THEMES().findIndex(([v]) => v === cur));
+  return `<div class="theme-toggle" role="radiogroup" aria-label="Appearance" style="--i:${i}"><span class="thumb" aria-hidden="true"></span>
+    ${THEMES().map(([v, l, ic]) => `<button type="button" role="radio" data-theme-set="${v}" aria-checked="${v === cur}" aria-label="${l}" data-tip="${l}">${icon(ic)}</button>`).join('')}</div>`;
+}
+function setTheme(t) {
+  if (state.settings.theme === t) return;
+  state.settings.theme = t; save();
+  // Update the switch in place (no full re-render) so the pill can slide.
+  $$('.theme-toggle').forEach((g) => {
+    g.style.setProperty('--i', THEMES().findIndex(([v]) => v === t));
+    $$('[data-theme-set]', g).forEach((b) => b.setAttribute('aria-checked', b.dataset.themeSet === t));
+  });
+  // Cross-fade old colours into new ones where the browser supports it (Android WebView, Chrome, Edge).
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  if (document.startViewTransition && !reduce) document.startViewTransition(applyTheme); else applyTheme();
 }
 function applyTheme() {
   const t = state?.settings.theme || 'system';
@@ -1088,7 +1128,7 @@ function render() {
   root.innerHTML = `<div class="app"><aside class="side"><div class="brand">${logo()}<span class="brand-name">Pocket Ledger</span></div>
     <nav class="nav">${NAV.map(([k, l, ic]) => `<button data-nav="${k}" class="${ui.view === k ? 'on' : ''} ${PHONE_BAR.includes(k) ? '' : 'phone-hide'}" ${ui.view === k ? 'aria-current="page"' : ''}>${icon(ic)}<span>${l}</span></button>`).join('')}
       <button class="more-btn ${PHONE_BAR.includes(ui.view) ? '' : 'on'}" id="moreBtn">${icon('more')}<span>More</span></button></nav>
-    <div class="side-foot">${w.B ? `Left this week<strong>${money(w.remaining)}</strong>` : `Balance<strong>${money(totalBalance())}</strong>`}
+    <div class="side-foot">${w.B ? `Left this week<strong>${moneyHtml(w.remaining)}</strong>` : `Balance<strong>${moneyHtml(totalBalance())}</strong>`}
       <div class="credit">Designed &amp; developed by ${AUTHOR.replace(' ', '&nbsp;')}</div></div></aside>
     <main class="main"><div class="page">${views[ui.view]()}</div></main>
     <button class="fab" data-add="expense" aria-label="Add expense">${icon('plus')}</button></div>`;
@@ -1104,6 +1144,7 @@ function bindCommon(root) {
   on('[data-nav]', (el) => { ui.view = el.dataset.nav; $('.main').scrollTop = 0; render(); $('.main').scrollTop = 0; });
   on('[data-go]', (el) => { ui.view = el.dataset.go; render(); $('.main').scrollTop = 0; });
   on('[data-add]', (el) => txForm({ type: el.dataset.add }));
+  on('[data-theme-set]', (el) => setTheme(el.dataset.themeSet));
   on('#moreBtn', () => openModal({
     title: 'More',
     body: `<div class="nav more-list">${NAV.filter(([k]) => !PHONE_BAR.includes(k)).map(([k, l, ic]) => `<button data-nav="${k}" class="${ui.view === k ? 'on' : ''}">${icon(ic)}<span>${l}</span></button>`).join('')}</div>
@@ -1148,12 +1189,12 @@ function bindSettings(root) {
   $('#restore', root).onclick = async () => {
     const apply = (data) => {
       if (!data || !Array.isArray(data.transactions) || !data.settings) return toast('That file isn’t a Pocket Ledger backup');
-      confirmBox('Restore this backup?', `It has ${data.transactions.length} transactions and will replace everything currently in the app.`, 'Replace my data', () => { state = migrate(data); save(); render(); toast('Backup restored'); });
+      confirmBox('Restore this backup?', `It has ${data.transactions.length} transactions and will replace everything currently in the app.`, 'Replace my data', () => { state = migrate(data); postDueRecurring(); save(); render(); toast('Backup restored'); });
     };
     if (hasApi()) { try { apply(await window.pywebview.api.open_backup()); } catch (e) { toast('Could not read that file'); } }
     else { const i = document.createElement('input'); i.type = 'file'; i.accept = '.json'; i.onchange = async () => { try { apply(JSON.parse(await i.files[0].text())); } catch { toast('Could not read that file'); } }; i.click(); }
   };
-  $('#reset', root).onclick = () => confirmBox('Erase all data?', 'Every transaction, budget, goal and setting will be deleted from this computer. Save a backup first if you might want it back.', 'Erase everything', () => { state = defaultState(); save(); ui.view = 'dashboard'; render(); });
+  $('#reset', root).onclick = () => confirmBox('Erase all data?', 'Every transaction, budget, goal and setting will be deleted from this device. Save a backup first if you might want it back.', 'Erase everything', () => { state = defaultState(); save(); ui.view = 'dashboard'; render(); });
   if (hasApi()) window.pywebview.api.data_location().then((p) => { const el = $('#dataLoc'); if (el) el.textContent = 'Saved automatically to ' + p; });
   else $('#dataLoc', root).textContent = isNativeApp() ? 'Saved automatically on this phone.' : 'Saved automatically in this browser.';
   $$('[data-cat-add]', root).forEach((b) => b.onclick = () => catForm({}, b.dataset.catAdd));
