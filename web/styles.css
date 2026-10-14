@@ -304,7 +304,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px 0; }
 .modal-head h2 { margin: 0; font-size: 18px; font-family: var(--num); font-weight: 400; }
 .modal-body { padding: 18px 22px; }
-.modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 0 22px 20px; }
+.modal-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 0 22px 20px; }
 .modal-foot .left { margin-right: auto; }
 @keyframes fade { from { opacity: 0; } }
 @keyframes rise { from { opacity: 0; transform: translateY(10px) scale(.98); } }

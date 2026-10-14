@@ -289,6 +289,122 @@ describe('backups', () => {
   });
 });
 
+/* ------------------------------------------------- merging backups */
+describe('merging a backup from another device', () => {
+  // Two devices that were set up separately: same starter names, different random ids.
+  const twoDevices = (L) => {
+    const mine = L.defaultState(); const theirs = L.defaultState();
+    const food = (s) => s.categories.find((c) => c.name.startsWith('Food')).id;
+    return { mine, theirs, food };
+  };
+
+  test('adds what is new and never adds the same transaction twice', (t) => {
+    const { L, close } = makeApp(); t.after(close);
+    const { mine, theirs, food } = twoDevices(L);
+    mine.transactions.push({ id: 'm1', type: 'expense', amount: 100, date: '2026-10-01', categoryId: food(mine), accountId: mine.accounts[0].id, note: '' });
+    theirs.transactions.push({ id: 'm1', type: 'expense', amount: 100, date: '2026-10-01', categoryId: food(theirs), accountId: theirs.accounts[0].id, note: '' });
+    theirs.transactions.push({ id: 't1', type: 'expense', amount: 250, date: '2026-10-02', categoryId: food(theirs), accountId: theirs.accounts[0].id, note: '' });
+    const once = L.mergeStates(mine, theirs);
+    assert.equal(once.state.transactions.length, 2);
+    assert.equal(once.added.transactions, 1);
+    const twice = L.mergeStates(once.state, theirs);             // merging the same file again changes nothing
+    assert.equal(twice.added.transactions, 0);
+    assert.equal(twice.state.transactions.length, 2);
+    assert.equal(mine.transactions.length, 1);                   // the inputs are not changed
+  });
+
+  test('starter accounts and categories match by name, so they are not doubled', (t) => {
+    const { L, close } = makeApp(); t.after(close);
+    const { mine, theirs, food } = twoDevices(L);
+    theirs.transactions.push({ id: 't1', type: 'expense', amount: 300, date: '2026-10-02', categoryId: food(theirs), accountId: theirs.accounts[0].id, note: '' });
+    const { state, added } = L.mergeStates(mine, theirs);
+    assert.equal(state.accounts.length, mine.accounts.length);
+    assert.equal(state.categories.length, mine.categories.length);
+    assert.equal(added.accounts + added.categories, 0);
+    const tx = state.transactions[0];
+    assert.equal(tx.accountId, mine.accounts[0].id);             // points at this device's Cash
+    assert.equal(tx.categoryId, food(mine));
+    L.state = state;
+    assert.equal(L.accountBalance(state.accounts[0]), -300);
+  });
+
+  test('a new account from the other device comes with its transactions', (t) => {
+    const { L, close } = makeApp(); t.after(close);
+    const { mine, theirs } = twoDevices(L);
+    theirs.accounts.push({ id: 'card', name: 'Credit card', initial: 1000, color: '#000' });
+    theirs.transactions.push({ id: 't1', type: 'transfer', amount: 200, date: '2026-10-02', accountId: 'card', toAccountId: theirs.accounts[0].id, note: '' });
+    const { state, added } = L.mergeStates(mine, theirs);
+    assert.equal(added.accounts, 1);
+    L.state = state;
+    assert.equal(L.accountBalance(state.accounts.find((a) => a.id === 'card')), 800);
+    assert.equal(L.accountBalance(state.accounts[0]), 200);     // this device's Cash received it
+  });
+
+  test('a scheduled payment posted on both devices is kept only once', (t) => {
+    const { L, close } = makeApp(); t.after(close);
+    const { mine, theirs, food } = twoDevices(L);
+    const rent = { id: 'r1', type: 'expense', amount: 900, note: 'Rent', frequency: 'monthly', anchorDay: 1, active: true };
+    mine.recurring.push({ ...rent, categoryId: food(mine), accountId: mine.accounts[0].id, nextDate: '2026-10-01' });
+    theirs.recurring.push({ ...rent, categoryId: food(theirs), accountId: theirs.accounts[0].id, nextDate: '2026-11-01' });
+    mine.transactions.push({ id: 'a', type: 'expense', amount: 900, date: '2026-09-01', recurringId: 'r1', note: 'Rent' });
+    theirs.transactions.push({ id: 'b', type: 'expense', amount: 900, date: '2026-09-01', recurringId: 'r1', note: 'Rent' });
+    theirs.transactions.push({ id: 'c', type: 'expense', amount: 900, date: '2026-10-01', recurringId: 'r1', note: 'Rent' });
+    const { state } = L.mergeStates(mine, theirs);
+    assert.deepEqual([...state.transactions.map((x) => x.date)].sort(), ['2026-09-01', '2026-10-01']);
+    assert.equal(state.recurring.length, 1);
+    assert.equal(state.recurring[0].nextDate, '2026-11-01');     // won't post October again
+  });
+
+  test('money saved into a shared goal on the other device is added to it', (t) => {
+    const { L, close } = makeApp(); t.after(close);
+    const { mine, theirs } = twoDevices(L);
+    mine.goals.push({ id: 'g1', name: 'Bike', target: 5000, saved: 1000, deadline: '' });
+    theirs.goals.push({ id: 'g1', name: 'Bike', target: 5000, saved: 1500, deadline: '' });
+    theirs.goals.push({ id: 'g2', name: 'Phone', target: 9000, saved: 700, deadline: '' });
+    theirs.transactions.push({ id: 't1', type: 'transfer', amount: 500, date: '2026-10-02', accountId: theirs.accounts[0].id, goalId: 'g1', note: '' });
+    theirs.transactions.push({ id: 't2', type: 'transfer', amount: 700, date: '2026-10-02', accountId: theirs.accounts[0].id, goalId: 'g2', note: '' });
+    const { state } = L.mergeStates(mine, theirs);
+    assert.equal(state.goals.find((g) => g.id === 'g1').saved, 1500);
+    assert.equal(state.goals.find((g) => g.id === 'g2').saved, 700); // new goal: its amount already counts t2
+  });
+
+  test('this device keeps its own settings', (t) => {
+    const { L, close } = makeApp(); t.after(close);
+    const { mine, theirs } = twoDevices(L);
+    mine.settings.name = 'Phone'; theirs.settings.name = 'Laptop';
+    assert.equal(L.mergeStates(mine, theirs).state.settings.name, 'Phone');
+  });
+
+  test('the Merge button keeps this device’s transactions and adds the backup’s', (t) => {
+    const { L, doc, add, expenseCat, close } = makeApp(); t.after(close);
+    add({ type: 'expense', amount: 50, date: '2026-10-07', categoryId: expenseCat('Food').id });
+    const backup = L.defaultState();
+    backup.transactions.push({ id: 'x1', type: 'expense', amount: 75, date: '2026-10-06', categoryId: backup.categories[0].id, accountId: backup.accounts[0].id, note: '' });
+    L.restoreBox(backup);
+    doc.querySelector('#rMerge').click();
+    assert.deepEqual([...L.state.transactions.map((x) => x.amount)].sort(), [50, 75]);
+    assert.equal(doc.querySelector('#overlay'), null);           // the dialog closed
+  });
+
+  test('the Replace button swaps in the backup', (t) => {
+    const { L, doc, add, expenseCat, close } = makeApp(); t.after(close);
+    add({ type: 'expense', amount: 50, date: '2026-10-07', categoryId: expenseCat('Food').id });
+    const backup = L.defaultState();
+    backup.transactions.push({ id: 'x1', type: 'expense', amount: 75, date: '2026-10-06', categoryId: backup.categories[0].id, accountId: backup.accounts[0].id, note: '' });
+    L.restoreBox(backup);
+    doc.querySelector('#rReplace').click();
+    assert.deepEqual([...L.state.transactions.map((x) => x.amount)], [75]);
+  });
+
+  test('the message says what was added', (t) => {
+    const { L, close } = makeApp(); t.after(close);
+    const none = { transactions: 0, accounts: 0, categories: 0, goals: 0, budgets: 0, recurring: 0 };
+    assert.equal(L.mergeSummary({ ...none, transactions: 12, accounts: 1 }), 'Added 12 transactions, 1 account');
+    assert.equal(L.mergeSummary({ ...none, categories: 2 }), 'Added 2 categories');
+    assert.equal(L.mergeSummary(none), 'Nothing new in this backup');
+  });
+});
+
 /* ------------------------------------------------- safety & rendering */
 describe('rendering', () => {
   test('every page renders without errors, with and without data', (t) => {
