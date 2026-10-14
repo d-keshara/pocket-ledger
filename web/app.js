@@ -1012,7 +1012,7 @@ function viewSettings() {
         <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="sDec" ${s.decimals ? 'checked' : ''}> Show cents / decimals</label>
       </div></div>
       <div class="panel"><h2>Your data</h2><div class="stack">
-        <p class="hint" style="margin:0">Back up regularly so you never lose your history. A backup can be restored on another device.</p>
+        <p class="hint" style="margin:0">Back up regularly so you never lose your history. Restore a backup on another device, or merge it to combine what both devices have.</p>
         <p class="hint" id="lastBackup" style="margin:0;color:var(--ink-2)">${lastBackupText()}</p>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="backup">${icon('download')}Save backup</button><button class="btn" id="restore">${icon('upload')}Restore backup</button><button class="btn" id="csvAll">${icon('download')}Export all as CSV</button></div>
         <p class="hint" id="dataLoc" style="margin:0"></p>
@@ -1189,7 +1189,7 @@ function bindSettings(root) {
   $('#restore', root).onclick = async () => {
     const apply = (data) => {
       if (!data || !Array.isArray(data.transactions) || !data.settings) return toast('That file isn’t a Pocket Ledger backup');
-      confirmBox('Restore this backup?', `It has ${data.transactions.length} transactions and will replace everything currently in the app.`, 'Replace my data', () => { state = migrate(data); postDueRecurring(); save(); render(); toast('Backup restored'); });
+      restoreBox(data);
     };
     if (hasApi()) { try { apply(await window.pywebview.api.open_backup()); } catch (e) { toast('Could not read that file'); } }
     else { const i = document.createElement('input'); i.type = 'file'; i.accept = '.json'; i.onchange = async () => { try { apply(JSON.parse(await i.files[0].text())); } catch { toast('Could not read that file'); } }; i.click(); }
@@ -1244,6 +1244,71 @@ function migrate(d) {
   d.version = 1;
   return d;
 }
+/* Combines a backup from another device ("theirs") into this device's data ("mine"). Nothing is deleted.
+   Items with the same id are the same item, so they are never added twice. Each device made its own
+   starter accounts and categories with different ids, so those also match by name.
+   Returns { state, added } where added counts the new items in each list. Neither input is changed. */
+function mergeStates(mine, theirs) {
+  const out = JSON.parse(JSON.stringify(mine)); theirs = JSON.parse(JSON.stringify(theirs));
+  const added = { transactions: 0, accounts: 0, categories: 0, goals: 0, budgets: 0, recurring: 0 };
+  const sameName = (a, b) => String(a.name || '').trim().toLowerCase() === String(b.name || '').trim().toLowerCase();
+  // Adds their items that this device doesn't have. Returns a map: their id -> the id used on this device.
+  const mergeList = (k, sameAs, fix = (x) => x, onMatch = () => {}) => {
+    const map = {};
+    for (const item of theirs[k]) {
+      const match = out[k].find((x) => x.id === item.id) || (sameAs && out[k].find((x) => sameAs(x, item)));
+      if (match) { map[item.id] = match.id; onMatch(match, item); }
+      else { map[item.id] = item.id; out[k].push(fix(item)); added[k]++; }
+    }
+    return map;
+  };
+  const accMap = mergeList('accounts', sameName);
+  const catMap = mergeList('categories', (a, b) => a.type === b.type && sameName(a, b));
+  const goalsBefore = new Set(out.goals.map((g) => g.id));
+  const goalMap = mergeList('goals');
+  const ref = (map, id) => (id != null && map[id]) || id;
+  const recMap = mergeList('recurring', null,
+    (r) => ({ ...r, accountId: ref(accMap, r.accountId), categoryId: ref(catMap, r.categoryId) }),
+    (m, r) => { if (r.nextDate > m.nextDate) m.nextDate = r.nextDate; }); // the other device may have posted further ahead
+  mergeList('budgets', (a, b) => a.categoryId === ref(catMap, b.categoryId) && a.period === b.period,
+    (b) => ({ ...b, categoryId: ref(catMap, b.categoryId) }));
+
+  for (const t of theirs.transactions) {
+    Object.assign(t, { accountId: ref(accMap, t.accountId), toAccountId: ref(accMap, t.toAccountId), categoryId: ref(catMap, t.categoryId),
+      goalId: ref(goalMap, t.goalId), fromGoalId: ref(goalMap, t.fromGoalId), recurringId: ref(recMap, t.recurringId) });
+    for (const f of Object.keys(t)) if (t[f] === undefined) delete t[f];
+    // Both devices post scheduled payments by themselves, each with its own id: same payment + same date = same transaction.
+    const dup = out.transactions.some((x) => x.id === t.id || (t.recurringId && x.recurringId === t.recurringId && x.date === t.date));
+    if (dup) continue;
+    out.transactions.push(t); added.transactions++;
+    // Same rule as goalEffect(). A goal that only existed on the other device already counts this in its saved amount.
+    const g = out.goals.find((x) => x.id === (t.goalId || t.fromGoalId));
+    if (g && goalsBefore.has(g.id)) g.saved = round2(g.saved + (t.goalId ? t.amount : -t.amount));
+  }
+  return { state: out, added };
+}
+/* Asks whether a backup should be merged into this device's data (safe) or replace it. */
+function restoreBox(data) {
+  const finish = (msg) => { postDueRecurring(); save(); render(); toast(msg); };
+  openModal({
+    title: 'Restore this backup?',
+    body: `<p style="margin:0">It has ${plural(data.transactions.length, 'transaction')}.</p>
+      <p class="hint" style="margin-top:10px"><b>Merge</b> keeps everything on this device and adds what’s new from the backup.
+      <b>Replace</b> deletes what’s on this device and uses the backup instead.</p>`,
+    foot: `<button class="btn" data-close>Cancel</button><button class="btn danger" id="rReplace">Replace my data</button><button class="btn primary" id="rMerge">Merge</button>`,
+    onMount: (m) => {
+      $('#rReplace', m).onclick = () => { closeModal(); state = migrate(data); finish('Backup restored'); };
+      $('#rMerge', m).onclick = () => { closeModal(); const r = mergeStates(state, migrate(data)); state = r.state; finish(mergeSummary(r.added)); };
+    },
+  });
+}
+/* "Added 12 transactions, 1 account", or a note that the backup had nothing new. */
+function mergeSummary(a) {
+  const parts = [[a.transactions, 'transaction', 'transactions'], [a.accounts, 'account', 'accounts'], [a.categories, 'category', 'categories'],
+    [a.goals, 'goal', 'goals'], [a.budgets, 'budget', 'budgets'], [a.recurring, 'scheduled payment', 'scheduled payments']]
+    .filter(([n]) => n).map(([n, one, many]) => `${n} ${n === 1 ? one : many}`);
+  return parts.length ? 'Added ' + parts.join(', ') : 'Nothing new in this backup';
+}
 /* ================= splash ================= */
 const SPLASH_MIN_MS = 1200; // long enough to read, short enough not to annoy
 const splashVersion = document.getElementById('splashVersion');
@@ -1269,7 +1334,7 @@ async function boot() {
 if (window.__LEDGER_TEST__) {
   window.__ledger = {
     get state() { return state; }, set state(v) { state = v; }, ui,
-    defaultState, migrate, render, money, esc, addDays, addMonths, daysBetween, weekStartOf, toISO, parseISO,
+    defaultState, migrate, mergeStates, restoreBox, mergeSummary, render, money, esc, addDays, addMonths, daysBetween, weekStartOf, toISO, parseISO,
     weekInfo, accountBalance, totalBalance, postDueRecurring, nextOccurrence, budgetStatus, filteredTx,
     periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner,
     backupDue, saveBackup, snoozeBackup, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
