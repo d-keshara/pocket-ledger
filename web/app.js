@@ -35,6 +35,11 @@ const ICONS = {
   pause: '<path d="M8 5v14M16 5v14"/>',
   play: '<path d="M7 4l13 8-13 8z"/>',
   minus: '<path d="M5 12h14"/>',
+  cloud: '<path d="M17.5 19H7a5 5 0 1 1 .9-9.92A6 6 0 0 1 19 10.5a4.25 4.25 0 0 1-1.5 8.5z"/>',
+  cloudOk: '<path d="M17.5 19H7a5 5 0 1 1 .9-9.92A6 6 0 0 1 19 10.5a4.25 4.25 0 0 1-1.5 8.5z"/><path d="m9 13.5 2 2 4-4"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  eyeOff: '<path d="M9.9 5.2A10.4 10.4 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-2.6 3.6M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
@@ -572,7 +577,7 @@ function viewDashboard() {
   const saved = mInc - mExp;
 
   return `<div class="head home-head"><div class="head-title"><h1>${esc(greeting())}</h1><p>${fmtDate(t, { full: true })} · week of ${fmtDate(w.start, { full: true, noDay: true })} – ${fmtDate(w.end, { full: true, noDay: true })}</p></div>
-    ${themeToggle()}
+    <div class="head-tools">${cloudButton()}${themeToggle()}</div>
     <div class="actions"><button class="btn" data-add="income">${icon('plus')}Income</button><button class="btn primary" data-add="expense">${icon('plus')}Expense</button></div></div>
     <section class="runway" aria-label="This week">${lead}<div class="days">${daysHtml}</div>${notes}</section>
     ${alertHtml}
@@ -1001,7 +1006,8 @@ function viewSettings() {
     return `<div class="list-row"><i class="dot" style="background:${c.color}"></i><span class="grow">${esc(c.name)} ${type === 'expense' && c.weekly === false ? '<span class="tag">Not in weekly limit</span>' : ''}</span><span class="muted" style="font-size:12.5px">${used} used</span>
     <button class="icon-btn" data-cat-edit="${c.id}" aria-label="Edit">${icon('edit')}</button><button class="icon-btn" data-cat-del="${c.id}" aria-label="Delete">${icon('trash')}</button></div>`;
   }).join('');
-  return `<div class="head"><div><h1>Settings</h1><p>Make it yours. Everything is stored only on this device.</p></div></div>
+  const signedIn = !!cloud()?.info().signedIn;
+  return `<div class="head"><div><h1>Settings</h1><p>Make it yours.${signedIn ? '' : ' Everything is stored only on this device.'}</p></div></div>
     <div class="cols" style="margin-top:0">
       <div class="panel"><h2>Profile</h2><div class="stack">
         <label class="field"><span>Your name</span><input class="input" id="sName" value="${esc(s.name)}" maxlength="30"></label>
@@ -1022,6 +1028,7 @@ function viewSettings() {
         <p class="hint shortcuts-hint" style="margin:0">Shortcuts: N new expense · I new income · Esc close</p>
       </div></div>
     </div>
+    ${cloudPanel()}
     <div class="cols">
       <div class="panel"><h2>Expense categories <button class="btn small" data-cat-add="expense">${icon('plus')}Add</button></h2>${catList('expense')}</div>
       <div class="panel"><h2>Income categories <button class="btn small" data-cat-add="income">${icon('plus')}Add</button></h2>${catList('income')}</div>
@@ -1029,7 +1036,7 @@ function viewSettings() {
     <section class="about" aria-label="About">
       ${logo(44)}
       <div class="about-text"><strong>Pocket Ledger</strong><span>Version ${APP_VERSION}</span></div>
-      <div class="about-credit">Designed and developed by <b>${AUTHOR}</b><span>© ${now().getFullYear()} ${AUTHOR}. Your data never leaves your device.</span></div>
+      <div class="about-credit">Designed and developed by <b>${AUTHOR}</b><span>© ${now().getFullYear()} ${AUTHOR}.${signedIn ? '' : ' Your data never leaves your device.'}</span></div>
     </section>`;
 }
 function catForm(c = {}, type) {
@@ -1046,6 +1053,194 @@ function catForm(c = {}, type) {
       if (c.id) Object.assign(state.categories.find((x) => x.id === c.id), rec); else state.categories.push({ id: uid(), ...rec });
       save(); closeModal(); render(); toast('Category saved');
     }; },
+  });
+}
+/* ---------- sync & account (web/sync.js) ---------- */
+/* window.PocketCloud comes from sync.js. If it's missing (tests, or the file failed to load), the
+   Sync parts are simply not shown and everything else works as before. */
+const cloud = () => (window.PocketCloud?.available ? window.PocketCloud : null);
+/* Password rules for new accounts. Firebase checks them again on its side (password policy in the console). */
+const PW_RULES = [
+  ['8 or more characters', (p) => p.length >= 8],
+  ['a letter', (p) => /\p{L}/u.test(p)],
+  ['a number', (p) => /\d/.test(p)],
+];
+const emailLooksOk = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
+
+/* The button next to the light/dark switch on the home page. */
+function cloudButton() {
+  const c = cloud(); if (!c) return '';
+  const i = c.info();
+  return i.signedIn
+    ? `<button class="btn cloud-btn on" data-go="settings" aria-label="Account: signed in as ${esc(i.email)}">${icon('cloudOk')}<span>Account</span></button>`
+    : `<button class="btn cloud-btn" id="cloudHead" aria-label="Sign in or create an account">${icon('cloud')}<span>Sign in</span></button>`;
+}
+function cloudPanel() {
+  const c = cloud(); if (!c) return '';
+  const i = c.info();
+  const row = (html) => `<div style="display:flex;gap:8px;flex-wrap:wrap">${html}</div>`;
+  let body;
+  if (i.signedIn) {
+    body = `<div class="acct">${icon('cloudOk')}<div><b>${esc(i.email)}</b><span>${i.verified ? 'Signed in' : 'Signed in · email not confirmed yet'}</span></div></div>
+      ${i.verified ? '' : `<div class="verify">We sent a link to <b>${esc(i.email)}</b>. Open it to confirm this email is yours (check spam too).
+        ${row('<button class="btn small" id="cloudCheck">I’ve confirmed it</button><button class="btn small ghost" id="cloudResend">Send the link again</button>')}</div>`}
+      <p class="hint" style="margin:0">Syncing your data between devices comes in the next step. For now your data still stays on this device.</p>
+      ${row(`<button class="btn" id="cloudOut">Sign out</button><button class="btn danger" id="cloudDel">${icon('trash')}Delete account</button>`)}`;
+  } else if (i.status === 'loading') {
+    body = '<p class="hint" style="margin:0">Starting…</p>';
+  } else {
+    body = `<p class="hint" style="margin:0">Optional. Sign in to use the same data on your phone and computer. Without an account, everything stays on this device like before.</p>
+      ${i.status === 'error' ? '<p class="form-error" style="margin:0">Sync couldn’t start. Check your internet connection and try again.</p>' : ''}
+      ${row(`<button class="btn primary" id="cloudUp">${icon('cloud')}Create account</button><button class="btn" id="cloudIn">Sign in</button>`)}`;
+  }
+  return `<div class="panel" style="margin-top:18px"><h2>Sync &amp; account</h2><div class="stack">${body}</div></div>`;
+}
+function bindCloud(root) {
+  const c = cloud(); if (!c) return;
+  const on = (id, fn) => { const b = $('#' + id, root); if (b) b.onclick = fn; };
+  on('cloudUp', () => accountForm('signup'));
+  on('cloudIn', () => accountForm('signin'));
+  on('cloudOut', async () => {
+    try { await c.signOut(); render(); toast('Signed out. Your data is still on this device.'); } catch (e) { toast(c.friendlyError(e)); }
+  });
+  on('cloudDel', deleteAccountBox);
+  on('cloudResend', async () => {
+    try { await c.sendVerification(); toast('Link sent. Check your inbox and spam folder.'); } catch (e) { toast(c.friendlyError(e)); }
+  });
+  on('cloudCheck', async () => {
+    try { await c.refresh(); render(); toast(c.info().verified ? 'Email confirmed. Thank you!' : 'Not confirmed yet. Open the link in the email first.'); } catch (e) { toast(c.friendlyError(e)); }
+  });
+}
+
+/* ----- form pieces: a field with a red message under it, and a message line for the whole form ----- */
+function inputField(id, label, { type = 'text', ac = '', focus = false, after = '' } = {}) {
+  const email = type === 'email';
+  const input = `<input class="input" id="${id}" type="${type}" autocomplete="${ac}" maxlength="${email ? 254 : 128}"
+    ${email ? 'inputmode="email" autocapitalize="off" spellcheck="false"' : ''} ${focus ? 'autofocus' : ''} aria-describedby="${id}-err">`;
+  return `<div class="field"><label class="field-label" for="${id}">${label}</label>
+    ${type === 'password' ? `<div class="pw-wrap">${input}<button type="button" class="icon-btn pw-eye" data-eye="${id}" aria-label="Show password" aria-pressed="false">${icon('eye')}</button></div>` : input}
+    <p class="field-error" id="${id}-err" hidden></p>${after}</div>`;
+}
+const FORM_MSG = '<p class="form-error" role="alert" hidden></p>';
+/* The message line for the whole form: red for errors, green when `ok`. */
+function formMsg(m, msg, ok = false) { const el = $('.form-error', m); el.textContent = msg || ''; el.hidden = !msg; el.classList.toggle('ok', ok); }
+/* Marks a field red. `msg` is shown under it; `true` makes it red with no text of its own. */
+function fieldError(m, id, msg) {
+  const inp = $('#' + id, m); const el = $('#' + id + '-err', m);
+  if (msg) inp.setAttribute('aria-invalid', 'true'); else inp.removeAttribute('aria-invalid');
+  el.textContent = typeof msg === 'string' ? msg : ''; el.hidden = typeof msg !== 'string' || !msg;
+  if (typeof msg === 'string' && msg) el.setAttribute('role', 'alert'); else el.removeAttribute('role');
+}
+const clearForm = (m) => { $$('.input', m).forEach((inp) => fieldError(m, inp.id, '')); formMsg(m, ''); };
+/* Show/hide password buttons, and typing in a field clears its red mark (and a "wrong email or password"). */
+function bindFormBits(m, submit) {
+  $$('[data-eye]', m).forEach((b) => b.onclick = () => {
+    const inp = $('#' + b.dataset.eye, m); const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    b.setAttribute('aria-pressed', show); b.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    b.innerHTML = icon(show ? 'eyeOff' : 'eye'); inp.focus();
+  });
+  $$('.input', m).forEach((inp) => {
+    inp.addEventListener('input', () => {
+      fieldError(m, inp.id, '');
+      // "Wrong email or password" is about both fields, so fixing either one clears both.
+      if (m.dataset.pairError) { $$('.input', m).forEach((x) => fieldError(m, x.id, '')); formMsg(m, ''); delete m.dataset.pairError; }
+    });
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+  });
+}
+/* Puts a Firebase error next to the field it is about. ids: { email, password, wrongMsg }. */
+function showCloudError(m, e, ids) {
+  const msg = cloud().friendlyError(e); const code = e?.code || '';
+  if (ids.email && /invalid-email|missing-email|email-already-in-use/.test(code)) return fieldError(m, ids.email, msg);
+  if (/weak-password|password-does-not-meet|missing-password/.test(code)) return fieldError(m, ids.password, msg);
+  if (/invalid-credential|wrong-password|user-not-found|invalid-login/.test(code)) {
+    if (!ids.email) return fieldError(m, ids.password, ids.wrongMsg || msg);
+    // Same message whether the email or the password was wrong, so nobody can test which emails have accounts.
+    fieldError(m, ids.email, true); fieldError(m, ids.password, true); m.dataset.pairError = '1';
+    return formMsg(m, msg);
+  }
+  formMsg(m, msg);
+}
+/* Shows "Signing in…" on a button while `work` runs. Returns true if it worked. */
+async function busy(m, btn, label, work, ids) {
+  const old = btn.textContent; btn.disabled = true; btn.textContent = label;
+  try { await work(); return true; } catch (e) { showCloudError(m, e, ids); return false; } finally { btn.disabled = false; btn.textContent = old; }
+}
+const focusFirstError = (m) => $('[aria-invalid="true"]', m)?.focus();
+
+function accountForm(mode) {
+  const c = cloud(); const up = mode === 'signup';
+  const rules = `<ul class="pw-rules" id="pwRules" aria-label="Password needs">${PW_RULES.map(([l]) => `<li>${icon('check')}${l}</li>`).join('')}</ul>`;
+  openModal({
+    title: up ? 'Create an account' : 'Sign in',
+    body: `<div class="stack">
+      ${up ? '<p class="hint" style="margin:0">Use the same data on your phone and computer. Free, and optional.</p>' : ''}
+      ${inputField('ce', 'Email', { type: 'email', ac: 'email', focus: true })}
+      ${inputField('cp', 'Password', { type: 'password', ac: up ? 'new-password' : 'current-password',
+        after: up ? rules : '<button class="link-btn forgot" id="cforgot" type="button">Forgot password?</button>' })}
+      ${up ? inputField('cp2', 'Confirm password', { type: 'password', ac: 'new-password' }) : ''}
+      ${FORM_MSG}
+      ${up ? '<p class="hint" style="margin:0">Keep your password safe: you’ll need it on your other devices. We’ll email you a link to confirm your address.</p>' : ''}
+      <p class="hint" style="margin:0">${up ? 'Already have an account?' : 'New here?'} <button class="link-btn" id="cswitch" type="button">${up ? 'Sign in' : 'Create an account'}</button></p></div>`,
+    foot: `<button class="btn" data-close>Cancel</button><button class="btn primary" id="cgo">${up ? 'Create account' : 'Sign in'}</button>`,
+    onMount: (m) => {
+      const go = $('#cgo', m); const ids = { email: 'ce', password: 'cp' };
+      const val = (id) => $('#' + id, m)?.value || '';
+      // Ticks each password rule as it's met.
+      const tickRules = (showBad) => $$('#pwRules li', m).forEach((li, n) => {
+        const ok = PW_RULES[n][1](val('cp'));
+        li.classList.toggle('ok', ok); li.classList.toggle('bad', !ok && showBad);
+      });
+      if (up) $('#cp', m).addEventListener('input', () => tickRules(false));
+      const run = async () => {
+        if (go.disabled) return;
+        clearForm(m);
+        const email = val('ce').trim(); const password = val('cp');
+        if (!email) fieldError(m, 'ce', 'Enter your email address.');
+        else if (!emailLooksOk(email)) fieldError(m, 'ce', 'That email address doesn’t look right.');
+        if (!password) fieldError(m, 'cp', up ? 'Choose a password.' : 'Enter your password.');
+        else if (up && PW_RULES.some(([, ok]) => !ok(password))) { fieldError(m, 'cp', 'Your password doesn’t meet the rules below yet.'); tickRules(true); }
+        if (up && password && val('cp2') !== password) fieldError(m, 'cp2', val('cp2') ? 'The two passwords don’t match.' : 'Type your password again.');
+        if ($('[aria-invalid="true"]', m)) return focusFirstError(m);
+        const ok = await busy(m, go, up ? 'Creating…' : 'Signing in…', () => (up ? c.signUp(email, password) : c.signIn('password', { email, password })), ids);
+        if (ok) { closeModal(); render(); toast(up ? 'Account created. Check your email to confirm it.' : 'Signed in'); } else focusFirstError(m);
+      };
+      go.onclick = run;
+      bindFormBits(m, run);
+      $('#cswitch', m).onclick = () => accountForm(up ? 'signin' : 'signup');
+      if (!up) $('#cforgot', m).onclick = async (e) => {
+        clearForm(m);
+        const email = val('ce').trim();
+        if (!email) return fieldError(m, 'ce', 'Type your email first, then tap “Forgot password?”.'), focusFirstError(m);
+        if (!emailLooksOk(email)) return fieldError(m, 'ce', 'That email address doesn’t look right.'), focusFirstError(m);
+        // Firebase doesn't say whether the account exists (so strangers can't check emails), so neither do we.
+        if (await busy(m, e.currentTarget, 'Sending…', () => c.resetPassword(email), ids)) formMsg(m, `If ${email} has an account, a reset link is on its way. Check spam too.`, true);
+      };
+    },
+  });
+}
+function deleteAccountBox() {
+  const c = cloud();
+  openModal({
+    title: 'Delete your account?',
+    body: `<div class="stack"><p style="margin:0">Your account will be deleted. The data on this device stays here.</p>
+      ${inputField('dp', 'Type your password to confirm', { type: 'password', ac: 'current-password', focus: true })}${FORM_MSG}</div>`,
+    foot: '<button class="btn" data-close>Cancel</button><button class="btn danger" id="dgo">Delete account</button>',
+    onMount: (m) => {
+      const go = $('#dgo', m);
+      const run = async () => {
+        if (go.disabled) return;
+        clearForm(m);
+        const password = $('#dp', m).value;
+        if (!password) return fieldError(m, 'dp', 'Enter your password.'), focusFirstError(m);
+        if (await busy(m, go, 'Deleting…', () => c.deleteAccount(password), { password: 'dp', wrongMsg: 'Wrong password.' })) {
+          closeModal(); render(); toast('Account deleted. Your data is still on this device.');
+        } else focusFirstError(m);
+      };
+      go.onclick = run;
+      bindFormBits(m, run);
+    },
   });
 }
 /* "system" means: follow the phone / computer setting. */
@@ -1147,6 +1342,7 @@ function bindCommon(root) {
   on('[data-go]', (el) => { ui.view = el.dataset.go; render(); $('.main').scrollTop = 0; });
   on('[data-add]', (el) => txForm({ type: el.dataset.add }));
   on('[data-theme-set]', (el) => setTheme(el.dataset.themeSet));
+  on('#cloudHead', () => accountForm('signin'));
   on('#moreBtn', () => openModal({
     title: 'More',
     body: `<div class="nav more-list">${NAV.filter(([k]) => !PHONE_BAR.includes(k)).map(([k, l, ic]) => `<button data-nav="${k}" class="${ui.view === k ? 'on' : ''}">${icon(ic)}<span>${l}</span></button>`).join('')}</div>
@@ -1199,6 +1395,7 @@ function bindSettings(root) {
   $('#reset', root).onclick = () => confirmBox('Erase all data?', 'Every transaction, budget, goal and setting will be deleted from this device. Save a backup first if you might want it back.', 'Erase everything', () => { state = defaultState(); save(); ui.view = 'dashboard'; render(); });
   if (hasApi()) window.pywebview.api.data_location().then((p) => { const el = $('#dataLoc'); if (el) el.textContent = 'Saved automatically to ' + p; });
   else $('#dataLoc', root).textContent = isNativeApp() ? 'Saved automatically on this phone.' : 'Saved automatically in this browser.';
+  bindCloud(root);
   $$('[data-cat-add]', root).forEach((b) => b.onclick = () => catForm({}, b.dataset.catAdd));
   $$('[data-cat-edit]', root).forEach((b) => b.onclick = () => catForm(cat(b.dataset.catEdit)));
   $$('[data-cat-del]', root).forEach((b) => b.onclick = () => {
@@ -1327,6 +1524,11 @@ async function boot() {
   postDueRecurring();
   render();
   hideSplash();
+  // Sync is optional: if anything in it fails, the app carries on without it.
+  try {
+    cloud()?.onChange(() => { if (!$('#overlay')) render(); }); // the home page button and Settings show the account
+    cloud()?.start();
+  } catch (e) { console.error('Sync could not start', e); }
   // Re-render at midnight so "today" stays correct if the app is left open.
   setInterval(() => { const t = today(); if (t !== boot.last) { boot.last = t; postDueRecurring(); if (!$('#overlay')) render(); } }, 60000);
   boot.last = today();
@@ -1339,7 +1541,7 @@ if (window.__LEDGER_TEST__) {
     defaultState, migrate, mergeStates, restoreBox, mergeSummary, render, money, esc, addDays, addMonths, daysBetween, weekStartOf, toISO, parseISO,
     weekInfo, accountBalance, totalBalance, postDueRecurring, nextOccurrence, budgetStatus, filteredTx,
     periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner,
-    backupDue, saveBackup, snoozeBackup, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
+    cloudPanel, accountForm, backupDue, saveBackup, snoozeBackup, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
   };
 } else {
   let booted = false;

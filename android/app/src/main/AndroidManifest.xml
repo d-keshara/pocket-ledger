@@ -30,7 +30,7 @@
         </provider>
     </application>
 
-    <!-- Permissions: none. Pocket Ledger works fully offline and never sends data anywhere,
-         so remove INTERNET even if a library asks for it. -->
-    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <!-- INTERNET is only used by the optional "Sync & account" feature (Firebase).
+         Without signing in, Pocket Ledger works fully offline and sends nothing. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 </manifest>

@@ -120,6 +120,37 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .stack { display: flex; flex-direction: column; gap: 14px; }
 .hint { font-size: 12.5px; color: var(--muted); margin: 0; }
+.form-error { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--danger); }
+.form-error.ok { color: var(--good); }
+
+/* ---------- sign-in forms: red fields, show/hide password, password rules ---------- */
+.field > .field-label { font-size: 12.5px; color: var(--ink-2); font-weight: 600; }
+.input[aria-invalid="true"] { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
+.input[aria-invalid="true"]:focus { outline-color: var(--danger); }
+.field-error { margin: 0; font-size: 12.5px; font-weight: 600; color: var(--danger); }
+.pw-wrap { position: relative; }
+.pw-wrap .input { padding-right: 44px; }
+.pw-eye { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); }
+.pw-eye svg { width: 18px; height: 18px; }
+input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button: we have ours */
+.pw-rules { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--muted); }
+.pw-rules li { display: flex; align-items: center; gap: 4px; transition: color .15s; }
+.pw-rules svg { width: 14px; height: 14px; opacity: .3; }
+.pw-rules li.ok { color: var(--good); }
+.pw-rules li.ok svg { opacity: 1; }
+.pw-rules li.bad { color: var(--danger); }
+.link-btn { font: inherit; background: none; border: 0; padding: 0; color: var(--accent); font-weight: 600; cursor: pointer; }
+.link-btn:hover { text-decoration: underline; }
+.link-btn:disabled { opacity: .6; cursor: default; }
+.forgot { align-self: flex-end; font-size: 12.5px; }
+/* account card in Settings, and the Sign in / Account button on the home page */
+.acct { display: flex; gap: 12px; align-items: center; }
+.acct > svg { width: 28px; height: 28px; color: var(--good); flex: none; }
+.acct span { display: block; font-size: 12.5px; color: var(--muted); }
+.verify { font-size: 13px; color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 10px; }
+.head-tools { display: flex; gap: 8px; align-items: center; }
+.cloud-btn { border-radius: 999px; }
+.cloud-btn.on svg { color: var(--good); }
 
 .seg { display: inline-flex; background: var(--surface-2); border-radius: 9px; padding: 3px; gap: 2px; }
 .seg button { border: 0; background: none; padding: 6px 14px; border-radius: 7px; cursor: pointer; color: var(--ink-2); }
@@ -470,7 +501,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .summary-bar > span:last-child { justify-content: flex-end; }
   .stat .v { font-size: 22px; font-size: clamp(19px, 18cqi, 26px); }
   .home-head .head-title { flex-basis: 0; }            /* share the first row with the switch... */
-  .home-head .theme-toggle { align-self: flex-start; }  /* ...which sits top-right, beside the greeting */
+  .home-head .head-tools { align-self: flex-start; }    /* ...which sits top-right, beside the greeting */
+  .cloud-btn { width: 40px; height: 40px; padding: 0; justify-content: center; } /* icon only on phones, as tall as the theme switch */
+  .cloud-btn span { display: none; }
   /* Toasts sit above the + button instead of covering (and blocking taps on) the tab bar */
   .toast-wrap { bottom: calc(var(--bar-gap) + 146px); width: max-content; max-width: calc(100% - 32px); }
   .hbar { grid-template-columns: 96px 1fr 80px; }
