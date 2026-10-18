@@ -1008,3 +1008,19 @@ describe('home page: today first', () => {
     assert.deepEqual(labels.slice(0, 3), ['', '', 'Rs650']); // Mon, Tue empty; Wed (today) 650
   });
 });
+
+describe('weekly limit box', () => {
+  test('typing numbers is not blocked, and Enter saves', (t) => {
+    const { L, S, w, doc, close } = makeApp(); t.after(close);
+    L.render();
+    doc.querySelector('#setBudget').click();
+    const box = doc.querySelector('#wb');
+    const digit = new w.KeyboardEvent('keydown', { key: '5', bubbles: true, cancelable: true });
+    box.dispatchEvent(digit);
+    assert.equal(digit.defaultPrevented, false, 'a digit key must not be cancelled');
+    box.value = '5000';
+    box.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    assert.equal(S.settings.weeklyBudget, 5000);
+    assert.equal(doc.querySelector('#overlay'), null);
+  });
+});

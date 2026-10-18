@@ -808,7 +808,8 @@ function weeklyLimitForm() {
     foot: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="wbSave">Save limit</button>',
     onMount: (m) => {
       const go = () => { s.weeklyBudget = round2(Math.max(0, parseFloat($('#wb', m).value) || 0)); save(); closeModal(); render(); toast('Weekly limit saved'); };
-      $('#wbSave', m).onclick = go; $('#wb', m).onkeydown = (e) => e.key === 'Enter' && go();
+      // Braces matter: an onkeydown that returns false cancels the key, which blocked typing any number.
+      $('#wbSave', m).onclick = go; $('#wb', m).onkeydown = (e) => { if (e.key === 'Enter') go(); };
     },
   });
 }
