@@ -974,3 +974,37 @@ describe('fixes from the bug review', () => {
     assert.equal(name.value, 'Half typed');
   });
 });
+
+describe('home page: today first', () => {
+  test('without a weekly limit: this week is the big number, with today’s income and expenses in two boxes', (t) => {
+    const { L, S, doc, add, expenseCat, incomeCat, close } = makeApp(); t.after(close);
+    add({ type: 'expense', amount: 650, date: '2026-10-07', categoryId: expenseCat('Food').id });
+    add({ type: 'expense', amount: 100, date: '2026-10-05', categoryId: expenseCat('Food').id });
+    add({ type: 'income', amount: 2500, date: '2026-10-07', categoryId: incomeCat().id });
+    L.render();
+    assert.match(doc.querySelector('.runway-lead .label').textContent, /Spent this week/);
+    assert.match(doc.querySelector('.runway-lead .big').textContent, /^Rs750\.00$/);
+    const minis = [...doc.querySelectorAll('.mini')].map((m) => m.textContent.replace(/\s+/g, ' ').trim());
+    assert.deepEqual(minis, ['Income today+Rs2,500.00', 'Expenses todayRs650.00']); // label, then the number
+    assert.match(doc.querySelector('#setBudget').textContent, /Set a weekly limit/);
+    assert.match(doc.querySelector('.home-head p').textContent, /^Wednesday, 7 October$/);
+  });
+
+  test('with a weekly limit: what is left today is the big number', (t) => {
+    const { L, S, doc, add, expenseCat, close } = makeApp(); t.after(close);
+    S.settings.weeklyBudget = 7000; // Wednesday: 5 days left, so 1,400 a day
+    add({ type: 'expense', amount: 400, date: '2026-10-07', categoryId: expenseCat('Food').id });
+    L.render();
+    assert.match(doc.querySelector('.runway-lead .label').textContent, /Left to spend today/);
+    assert.match(doc.querySelector('.runway-lead .big').textContent, /^Rs1,000\.00$/);
+    assert.match(doc.querySelector('.runway-note').textContent, /6,600 left this week/);
+  });
+
+  test('days without spending show no "0" above their bar', (t) => {
+    const { L, doc, add, expenseCat, close } = makeApp(); t.after(close);
+    add({ type: 'expense', amount: 650, date: '2026-10-07', categoryId: expenseCat('Food').id });
+    L.render();
+    const labels = [...doc.querySelectorAll('.day .amt')].map((a) => a.textContent.trim());
+    assert.deepEqual(labels.slice(0, 3), ['', '', 'Rs650']); // Mon, Tue empty; Wed (today) 650
+  });
+});

@@ -215,13 +215,15 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
 .runway-lead .label { color: var(--ink-2); font-size: 14px; }
 .runway-lead .big { font-family: var(--num); font-size: 60px; font-weight: 600; line-height: 1.05; margin: 6px 0 4px; letter-spacing: -.02em; color: var(--accent); }
 .runway-lead .big.over { color: var(--danger); }
-.runway-lead .sub { color: var(--ink-2); margin: 0 0 16px; }
-.tank { height: 10px; border-radius: 6px; background: var(--surface-2); overflow: hidden; display: flex; }
-.tank i { display: block; height: 100%; background: var(--accent); border-radius: 6px; transition: width .5s; }
-.tank.warn i { background: var(--warn); }
-.tank.over i { background: var(--danger); }
-.tank-legend { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); margin-top: 6px; }
-.runway-lead .setb { margin-top: 14px; }
+.runway-lead .big.plain { color: var(--ink); } /* the week total: white in dark mode, dark in light mode */
+/* two smaller numbers under the big one: e.g. "Income today" and "This week" */
+.today-pair { display: flex; gap: 10px; margin: 12px 0 14px; }
+.mini { flex: 1 1 0; min-width: 0; background: var(--surface-2); border-radius: 12px; padding: 10px 12px; }
+.mini > span { display: block; font-size: 12.5px; color: var(--muted); }
+.mini b { display: block; font-family: var(--num); font-size: 20px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini b.pos { color: var(--good); }   /* income: green */
+.mini b.neg { color: var(--danger); } /* expenses: red */
+.runway-lead .link-btn { font-size: 13px; text-align: left; }
 
 .days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; align-items: end; } /* minmax(0,..): never wider than the card */
 .day { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: default; }
@@ -234,8 +236,12 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
 .day .amt { font-family: var(--num); font-size: 14px; font-weight: 600; white-space: nowrap; }
 .day .dn { font-size: 12px; color: var(--muted); }
 .day.today .dn { color: var(--accent); font-weight: 700; }
-.runway-note { grid-column: 1 / -1; display: flex; gap: 22px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 14px; color: var(--ink-2); font-size: 13.5px; }
-.runway-note b { color: var(--ink); font-family: var(--num); font-weight: 600; font-size: 17px; }
+/* the week in one row of small chips */
+.runway-note { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 14px; }
+.chip { background: var(--surface-2); border-radius: 999px; padding: 5px 11px; font-size: 12.5px; color: var(--ink-2); white-space: nowrap; }
+.chip b { color: var(--ink); font-family: var(--num); font-weight: 600; font-size: 13.5px; }
+.chip.neg, .chip.neg b { color: var(--danger); }
+.chip.pos, .chip.pos b { color: var(--good); }
 
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-top: 18px; }
 .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; container-type: inline-size; }
@@ -493,6 +499,13 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
 
   /* 4. Tighter spacing; extra bottom padding so the + never covers content */
   .page { padding: max(40px, calc(env(safe-area-inset-top) + 16px)) 16px 100px; } /* room below the status bar / notch */
+  /* A strip in the page colour behind the phone's status bar (time, battery), so content scrolls
+     under it instead of under the icons. Its height is 0 where there is no status bar over the app. */
+  body::before {
+    content: ''; position: fixed; top: 0; left: 0; right: 0; z-index: 45; pointer-events: none;
+    height: env(safe-area-inset-top, 0px); background: var(--bg);
+  }
+  body:has(.welcome)::before { background: var(--side); } /* the welcome screen has a green background */
   .head h1 { font-size: 24px; }
   .runway { padding: 18px; gap: 18px; }
   .runway-lead .big { font-size: 50px; }
