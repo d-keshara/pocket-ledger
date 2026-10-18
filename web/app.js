@@ -13,6 +13,8 @@ const CURRENCIES = [
 ];
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DAY_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MONTH_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 const ICONS = {
   more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
@@ -544,20 +546,24 @@ function viewDashboard() {
   const projected = round2((w.spent / elapsed) * 7);
   const noSpend = w.days.slice(0, w.todayIdx).filter((d) => d.spent === 0).length;
 
+  /* The big number: what's left to spend today (with a weekly limit) or what was spent this week (without one).
+     Under it, today's money in two boxes; the week in one row of chips below the bars. */
+  const incomeToday = round2(sum(incomeIn(t, t), (x) => x.amount));
+  const mini = (label, value, cls = '') => `<div class="mini"><span>${label}</span><b class="${cls}">${value}</b></div>`;
+  const incomeMini = mini('Income today', incomeToday ? '+' + moneyHtml(incomeToday) : moneyHtml(0), 'pos');
   let lead;
   if (!w.B) {
-    lead = `<div class="runway-lead"><div class="label">Spent this week</div><div class="big">${moneyHtml(w.spent)}</div>
-      <p class="sub">Set a weekly limit and you'll see how much you can safely spend each day, so money lasts until the week ends.</p>
-      <button class="btn primary" id="setBudget">${icon('target')}Set weekly limit</button></div>`;
+    const expensesToday = round2(sum(expensesIn(t, t), (x) => x.amount)); // every expense today, also rent and bills
+    lead = `<div class="runway-lead"><div class="label">Spent this week</div><div class="big plain">${moneyHtml(w.spent)}</div>
+      <div class="today-pair">${incomeMini}${mini('Expenses today', moneyHtml(expensesToday), 'neg')}</div>
+      <button class="link-btn" id="setBudget">Set a weekly limit →</button></div>`;
   } else {
-    const over = w.leftToday < 0; const ratio = w.spent / w.B;
+    const over = w.leftToday < 0;
     lead = `<div class="runway-lead">
-      <div class="label">${over ? 'Over today’s share by' : 'You can spend today'}</div>
+      <div class="label">${over ? 'Over today’s share by' : 'Left to spend today'}</div>
       <div class="big ${over ? 'over' : ''}">${moneyHtml(Math.abs(w.leftToday))}</div>
-      <p class="sub">${w.remaining >= 0 ? `${money(w.remaining)} left of ${money(w.B)} this week` : `${money(-w.remaining)} over this week’s ${money(w.B)} limit`}</p>
-      <div class="tank ${ratio > 1 ? 'over' : ratio > .8 ? 'warn' : ''}"><i style="width:${clamp(100 - ratio * 100, 0, 100)}%"></i></div>
-      <div class="tank-legend"><span>${w.daysLeft} day${w.daysLeft > 1 ? 's' : ''} to go</span><span>${Math.round(clamp(1 - ratio, 0, 1) * 100)}% left</span></div>
-      <button class="btn small ghost setb" id="setBudget">${icon('edit')}Change weekly limit</button></div>`;
+      <div class="today-pair">${mini('Spent today', moneyHtml(w.spentToday), 'neg')}${incomeMini}</div>
+      <button class="link-btn" id="setBudget">Change weekly limit (${esc(money(w.B, { short: true }))})</button></div>`;
   }
   const even = w.B / 7;
   const scaleMax = Math.max(even * 1.5, ...w.days.map((d) => d.spent), 1);
@@ -568,15 +574,17 @@ function viewDashboard() {
     const over = w.B && d.spent > allowance + 0.001;
     const tipTxt = `${fmtDate(d.date, { full: true })}<br>${future ? `Plan up to <b>${esc(money(allowance))}</b>` : `Spent <b>${esc(money(d.spent))}</b>${w.B ? `<br>Daily share ${esc(money(allowance))}` : ''}`}`;
     return `<div class="day ${future ? 'future' : ''} ${isToday ? 'today' : ''}" data-tip="${esc(tipTxt)}">
-      <div class="amt">${future ? (w.B ? moneyHtml(allowance, { short: true }) : '') : moneyHtml(d.spent, { short: true })}</div>
+      <div class="amt">${future ? (w.B && allowance > 0 ? moneyHtml(allowance, { short: true }) : '&nbsp;') : (d.spent > 0 ? moneyHtml(d.spent, { short: true }) : '&nbsp;')}</div>
       <div class="col">${future ? '' : `<div class="fill ${over ? 'over' : ''}" style="height:${h}%"></div>`}${w.B ? `<div class="allow" style="bottom:${ah}%"></div>` : ''}</div>
       <div class="dn">${isToday ? 'Today' : DAY_SHORT[dt.getDay()]}</div></div>`;
   }).join('');
   const diff = w.spent - lastWSamePoint;
+  const chip = (html, cls = '') => `<span class="chip ${cls}">${html}</span>`;
   const notes = `<div class="runway-note">
-    <span>At this pace the week ends at <b>${moneyHtml(projected)}</b>${w.B ? (projected > w.B ? ` <span class="neg">(${money(projected - w.B)} over)</span>` : ' <span class="pos">(within limit)</span>') : ''}</span>
-    <span>Same point last week <b>${moneyHtml(lastWSamePoint)}</b> ${round2(diff) ? `<span class="${diff > 0 ? 'neg' : 'pos'}">${money(diff, { sign: true })}</span>` : ''}</span>
-    <span>No-spend days <b>${noSpend}</b></span>
+    ${w.B ? chip(w.remaining >= 0 ? `<b>${money(w.remaining, { short: true })}</b> left this week` : `<b>${money(-w.remaining, { short: true })}</b> over this week`, w.remaining >= 0 ? '' : 'neg') : ''}
+    ${w.spent ? chip(`On pace for <b>${money(projected, { short: true })}</b>`, w.B && projected > w.B ? 'neg' : '') : ''}
+    ${round2(diff) ? chip(`<b>${money(diff, { sign: true, short: true })}</b> vs last week`, diff > 0 ? 'neg' : 'pos') : ''}
+    ${chip(`<b>${noSpend}</b> no-spend day${noSpend === 1 ? '' : 's'}`)}
   </div>`;
 
   // budget alerts
@@ -588,10 +596,10 @@ function viewDashboard() {
   const upcoming = state.recurring.filter((r) => r.active && r.nextDate <= addDays(t, 14)).sort((a, b) => a.nextDate.localeCompare(b.nextDate)).slice(0, 5);
   const saved = mInc - mExp;
 
-  return `<div class="head home-head"><div class="head-title"><h1>${esc(greeting())}</h1><p>${fmtDate(t, { full: true })} · week of ${fmtDate(w.start, { full: true, noDay: true })} – ${fmtDate(w.end, { full: true, noDay: true })}</p></div>
+  return `<div class="head home-head"><div class="head-title"><h1>${esc(greeting())}</h1><p>${DAY_LONG[parseISO(t).getDay()]}, ${parseISO(t).getDate()} ${MONTH_LONG[parseISO(t).getMonth()]}</p></div>
     <div class="head-tools">${cloudButton()}${themeToggle()}</div>
     <div class="actions"><button class="btn" data-add="income">${icon('plus')}Income</button><button class="btn primary" data-add="expense">${icon('plus')}Expense</button></div></div>
-    <section class="runway" aria-label="This week">${lead}<div class="days">${daysHtml}</div>${notes}</section>
+    <section class="runway" aria-label="Today and this week">${lead}<div class="days">${daysHtml}</div>${notes}</section>
     ${alertHtml}
     ${backupCard()}
     <div class="stats">
