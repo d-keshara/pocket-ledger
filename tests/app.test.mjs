@@ -183,6 +183,17 @@ describe('scheduled payments', () => {
     assert.equal(S.transactions.length, 3); // 23 Sep, 30 Sep, 7 Oct (today)
   });
 
+  test('two devices posting the same payment make the same transaction id (for sync)', (t) => {
+    const a = makeApp(); const b = makeApp(); t.after(a.close); t.after(b.close);
+    for (const d of [a, b]) {
+      d.S.recurring.push({ id: 'r1', type: 'expense', amount: 50000, note: 'Rent', categoryId: d.expenseCat('Rent').id,
+        frequency: 'monthly', nextDate: '2026-09-01', anchorDay: 1, accountId: d.cash.id, active: true });
+      d.L.postDueRecurring();
+    }
+    assert.deepEqual([...a.S.transactions.map((x) => x.id)], ['r1-2026-09-01', 'r1-2026-10-01']);
+    assert.deepEqual([...b.S.transactions.map((x) => x.id)], [...a.S.transactions.map((x) => x.id)]);
+  });
+
   test('paused payments are not posted', (t) => {
     const { L, S, cash, expenseCat, close } = makeApp(); t.after(close);
     S.recurring.push({ id: 'r1', type: 'expense', amount: 100, categoryId: expenseCat('Food').id,

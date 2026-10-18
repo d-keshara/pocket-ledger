@@ -180,7 +180,9 @@ function postDueRecurring() {
   for (const r of state.recurring) {
     let guard = 0;
     while (r.active && r.nextDate <= t && guard++ < 400) {
-      state.transactions.push({ id: uid(), type: r.type, amount: r.amount, date: r.nextDate, categoryId: r.categoryId, accountId: r.accountId, note: r.note, recurringId: r.id });
+      // The id comes from the payment and its date, not uid(): two synced devices posting the same rent
+      // on the same day then make the same transaction instead of two.
+      state.transactions.push({ id: `${r.id}-${r.nextDate}`, type: r.type, amount: r.amount, date: r.nextDate, categoryId: r.categoryId, accountId: r.accountId, note: r.note, recurringId: r.id });
       r.nextDate = nextOccurrence(r, r.nextDate); n++;
     }
   }
