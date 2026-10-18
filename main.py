@@ -6,6 +6,7 @@ and stores data as JSON in %APPDATA%\\PocketLedger\\data.json.
 import json
 import os
 import shutil
+import socket
 import sys
 from datetime import datetime
 
@@ -86,6 +87,23 @@ class Api:
 WEBVIEW_DIR = os.path.join(data_dir(), "webview")
 
 
+# The page is served on the first free port of these (web/index.html knows this range too).
+# Normally that's always 47613, so the browser storage (and the sync sign-in) stays the same between runs.
+PORTS = range(47613, 47623)
+
+
+def free_port():
+    """The first port in PORTS that no other program is using, or None if all are taken."""
+    for port in PORTS:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", port))
+                return port
+            except OSError:
+                continue
+    return None  # pywebview then picks any free port; sync just asks to sign in again
+
+
 def clear_page_cache():
     """Delete the browser's saved copies of index.html, app.js, styles.css...
 
@@ -112,13 +130,13 @@ def main():
     api._window = window
     # For the optional sync sign-in (Firebase), the page needs a real web address and storage that is
     # kept between runs:
-    #   http_server + a fixed port -> always http://127.0.0.1:47613, so the browser storage stays the same
+    #   http_server + a fixed port -> http://127.0.0.1:47613 (see PORTS), so the browser storage stays the same
     #   private_mode=False + storage_path -> sign-in is remembered after closing the app
     # The money data itself is still saved in data.json by save_data() above.
     webview.start(
         debug="--debug" in sys.argv,
         http_server=True,
-        http_port=47613,
+        http_port=free_port(),
         private_mode=False,
         storage_path=WEBVIEW_DIR,
     )
