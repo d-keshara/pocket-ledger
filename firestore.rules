@@ -1,0 +1,30 @@
+rules_version = '2';
+
+// Security rules for Pocket Ledger's cloud sync (Firestore).
+// Paste this into the Firebase console: Firestore Database > Rules > Publish.
+//
+// What they allow:
+//   - A signed-in person can read and write ONLY their own folder: users/{their id}/...
+//   - Only the folders the app uses: the 6 lists and "meta" (settings).
+//   - Every write must carry the server's own time (_at), so nobody can fake when a change happened.
+// Everything else (other people's folders, signed-out visitors, any other path) is refused.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+    function isAppList(list) {
+      return list in ['accounts', 'categories', 'transactions', 'budgets', 'goals', 'recurring', 'meta'];
+    }
+
+    match /users/{uid}/{list}/{id} {
+      allow read: if isOwner(uid) && isAppList(list);
+      allow create, update: if isOwner(uid) && isAppList(list)
+        && id.size() <= 100
+        && request.resource.data._at == request.time
+        && request.resource.data.keys().size() <= 40;
+      allow delete: if isOwner(uid) && isAppList(list);
+    }
+  }
+}

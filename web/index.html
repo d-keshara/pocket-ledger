@@ -26,8 +26,9 @@
 <div id="root"></div>
 <div id="tip" role="tooltip"></div>
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>
-<!-- Optional sync: firebase-config.js + sync.js only define window.PocketCloud; Firebase itself loads later, and only if needed -->
+<!-- Optional sync: these only define window.PocketSync and window.PocketCloud; Firebase itself loads later, and only if needed -->
 <script src="firebase-config.js"></script>
+<script src="sync-core.js"></script>
 <script src="sync.js"></script>
 <script src="app.js"></script>
 <script>
