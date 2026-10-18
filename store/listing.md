@@ -12,7 +12,7 @@ Pocket Ledger tells you one simple thing every day: how much you can spend today
 Set a weekly spending limit and Pocket Ledger shares it across the days that are left. Spend less today and tomorrow's share grows. Overspend and the rest of the week gets tighter. No spreadsheets, no complicated charts to decode: just one clear number.
 
 WHAT YOU CAN DO
-• See "You can spend today" at a glance, with a day-by-day bar chart of your week
+• See what you can spend today at a glance, with today's income and expenses and a day-by-day bar chart of your week
 • Add income and expenses in seconds, with categories, notes and accounts (cash, bank and more)
 • Set monthly or weekly budgets for each category and see which ones are on track
 • Save towards goals like an emergency fund, a new laptop or a trip, with a weekly target to reach them in time
@@ -20,11 +20,12 @@ WHAT YOU CAN DO
 • See reports: income vs. expenses by month, spending by category, your biggest expenses and your savings rate
 • Search and filter every transaction by date, type, category or account
 • Choose your currency (LKR, USD, EUR, GBP, INR, AUD and many more), your first day of the week, and light or dark mode
+• Optional sync: create a free account to use the same data on your phone and computer, updated live
 
-YOUR DATA STAYS ON YOUR PHONE
-• No account and no sign-in
+PRIVATE BY DEFAULT
+• No account needed: without one, your data never leaves your phone
+• Sync only if you choose to, and delete your account and its data any time
 • No ads, no analytics, no tracking
-• The app does not even have permission to use the internet, so your data can't leave your phone
 • Save a backup file whenever you like and keep it wherever you choose, such as Google Drive or your phone's storage
 • Restore a backup on a new phone in a couple of taps
 • Export your transactions as a CSV file to open in Excel or Google Sheets
@@ -55,3 +56,28 @@ Designed and developed by D. Kezara.
 ## Links
 - Privacy policy: https://d-keshara.github.io/pocket-ledger/privacy.html
 - Web version: https://d-keshara.github.io/pocket-ledger/
+- Delete account (Play Console > App content > Data safety > "Delete account URL"): https://d-keshara.github.io/pocket-ledger/account.html?mode=deleteAccount
+
+## What's new in 1.7.0 (release notes, max 500)
+New: optional sync. Create a free account to use the same data on your phone and computer, updated live. Without an account the app works exactly as before, fully on your device.
+Also new: the home screen now shows today's income and expenses at a glance, and the week in a tidy row below the chart.
+Fixed: numbers can now be typed in the weekly limit box.
+
+## Data safety form (Play Console > App content > Data safety), from 1.7.0
+Answers for the optional sync (Firebase). Check them against Firebase's own guide before submitting:
+https://firebase.google.com/docs/android/play-data-disclosure
+
+- Does your app collect or share any of the required user data types? **Yes**
+- Is all of the user data collected by your app encrypted in transit? **Yes**
+- Do you provide a way for users to request that their data is deleted? **Yes** (in the app, and the Delete account URL above)
+- Does your app allow users to create an account? **Yes**, with the Delete account URL above
+
+Data types (all: **Collected: yes, Shared: no, Processed ephemerally: no, Optional** (only if the person turns on sync), **Purpose: App functionality** (plus Account management for the email address)):
+| Category | Data type | Why |
+|---|---|---|
+| Personal info | Email address | Account sign-in (Account management) |
+| Personal info | Name | The greeting name syncs with the settings |
+| Financial info | Other financial info | Transactions, budgets, goals and accounts the person enters, synced between their devices |
+| App info and performance / Device or other IDs | Device or other IDs | A random code for the device that made each change, and Firebase's own sign-in identifiers |
+
+"Shared" stays **No**: Google (Firebase) processes the data on our behalf as a service provider, which Play does not count as sharing.

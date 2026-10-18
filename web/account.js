@@ -1,12 +1,15 @@
-/* The page behind the links in Firebase's emails (account.html):
- *   ?mode=resetPassword&oobCode=...  choose a new password
- *   ?mode=verifyEmail&oobCode=...    confirm the email address
+/* The account page (account.html):
+ *   ?mode=resetPassword&oobCode=...  choose a new password      (link in Firebase's email)
+ *   ?mode=verifyEmail&oobCode=...    confirm the email address  (link in Firebase's email)
+ *   ?mode=deleteAccount              delete the account and its synced data, without the app
+ *                                    (Google Play asks apps with accounts for such a web page)
  * "oobCode" is a one-time code from the email. It is only sent to Firebase, never shown or stored.
  * Firebase is told to use this page in the console: Authentication > Templates > Customize action URL.
  */
 import { initializeApp } from './vendor/firebase/firebase-app.js';
 import {
   initializeAuth, inMemoryPersistence, verifyPasswordResetCode, confirmPasswordReset, applyActionCode,
+  signInWithEmailAndPassword, sendPasswordResetEmail, deleteUser,
 } from './vendor/firebase/firebase-auth.js';
 
 const box = document.getElementById('box');
@@ -46,6 +49,8 @@ const LINK_PROBLEM = {
   'auth/too-many-requests': 'Too many tries. Wait a few minutes and try again.',
   'auth/weak-password': 'That password is too weak. Use 8 or more characters with a letter and a number.',
   'auth/password-does-not-meet-requirements': 'That password is too weak. Use 8 or more characters with a letter and a number.',
+  'auth/invalid-credential': 'Wrong email or password.',
+  'auth/invalid-email': 'That email address doesn’t look right.',
 };
 const problem = (e) => LINK_PROBLEM[e?.code] || 'Something went wrong. Reload this page, or ask for a new link in Pocket Ledger.';
 
@@ -114,13 +119,73 @@ function resetForm(auth, email) {
   };
 }
 
+/* ----- delete the account, without the app ----- */
+function emailField() {
+  return `<div class="field"><label class="field-label" for="em">Email</label>
+    <input class="input" id="em" type="email" autocomplete="email" inputmode="email" autocapitalize="off" spellcheck="false" maxlength="254" aria-describedby="em-err">
+    <p class="field-error" id="em-err" hidden></p></div>`;
+}
+function deleteForm(auth) {
+  box.innerHTML = `<form class="stack" novalidate>
+    <div><h1>Delete your account</h1>
+      <p class="hint" style="margin:0">This deletes your Pocket Ledger account and everything synced to it, for good. Money history saved on your own devices stays there (remove it in the app with Settings › Erase all data).</p></div>
+    ${emailField()}
+    ${passwordField('pw', 'Password').replace('autocomplete="new-password"', 'autocomplete="current-password"')}
+    <button class="link-btn" type="button" id="forgot" style="align-self:flex-start;font-size:12.5px">Forgot your password? Send me a reset link</button>
+    <p class="form-error" role="alert" hidden></p>
+    <button class="btn danger" type="submit" id="go">Delete my account and its data</button>
+  </form>`;
+  const form = $('form'); const go = $('#go');
+  box.querySelectorAll('.input').forEach((inp) => inp.addEventListener('input', () => { fieldError(inp.id, ''); formMsg(''); }));
+  box.querySelectorAll('[data-eye]').forEach((b) => b.onclick = () => {
+    const inp = $('#' + b.dataset.eye); const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password'; b.setAttribute('aria-pressed', show); b.innerHTML = icon(show ? 'eyeOff' : 'eye'); inp.focus();
+  });
+  const email = () => $('#em').value.trim();
+  const emailOk = () => {
+    if (!email()) { fieldError('em', 'Enter your email address.'); return false; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email())) { fieldError('em', 'That email address doesn’t look right.'); return false; }
+    return true;
+  };
+  $('#em').focus();
+  $('#forgot').onclick = async () => {
+    fieldError('em', ''); formMsg('');
+    if (!emailOk()) return $('#em').focus();
+    try { await sendPasswordResetEmail(auth, email()); } catch (err) { if (err?.code !== 'auth/user-not-found') return formMsg(problem(err)); }
+    const el = $('.form-error'); el.textContent = `If ${email()} has an account, a reset link is on its way.`; el.hidden = false; el.classList.add('ok');
+  };
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    if (go.disabled) return;
+    fieldError('em', ''); fieldError('pw', ''); formMsg('');
+    const okEmail = emailOk();
+    if (!$('#pw').value) fieldError('pw', 'Enter your password.');
+    const bad = box.querySelector('[aria-invalid="true"]'); if (bad || !okEmail) return (bad || $('#em')).focus();
+    go.disabled = true; go.textContent = 'Deleting…';
+    try {
+      const { user } = await signInWithEmailAndPassword(auth, email(), $('#pw').value);
+      // Everything synced to the account first, then the account itself.
+      const F = await import('./vendor/firebase/firebase-firestore.js');
+      const db = F.initializeFirestore(auth.app, { ignoreUndefinedProperties: true });
+      await window.PocketSync.makeFirestoreAdapter(F, db, user.uid, 'web-delete').deleteAll();
+      await deleteUser(user);
+      done(true, 'Account deleted', 'Your account and everything synced to it have been deleted. You can close this page.');
+    } catch (err) {
+      go.disabled = false; go.textContent = 'Delete my account and its data';
+      if (/invalid-credential|wrong-password|user-not-found/.test(err?.code)) { fieldError('em', ' '); fieldError('pw', 'Wrong email or password.'); $('#pw').focus(); } else formMsg(problem(err));
+    }
+  };
+}
+
 /* ----- start ----- */
 async function main() {
-  if (!window.FIREBASE_CONFIG || !code || !['resetPassword', 'verifyEmail'].includes(mode)) {
+  const known = mode === 'deleteAccount' || (code && ['resetPassword', 'verifyEmail'].includes(mode));
+  if (!window.FIREBASE_CONFIG || !known) {
     return done(false, 'Nothing to do here', 'This page opens from the links in Pocket Ledger’s emails. If you copied a link, make sure you copied all of it.');
   }
-  // No sign-in is kept on this page: the one-time code is all it needs.
+  // No sign-in is kept on this page: nothing is remembered after it is closed.
   const auth = initializeAuth(initializeApp(window.FIREBASE_CONFIG), { persistence: inMemoryPersistence });
+  if (mode === 'deleteAccount') return deleteForm(auth);
   try {
     if (mode === 'verifyEmail') {
       await applyActionCode(auth, code);
