@@ -696,3 +696,191 @@ describe('1.5.0 bug fixes', () => {
     assert.equal(S.recurring[0].anchorDay, 31);
   });
 });
+
+/* ------------------------------------------------------ sync & account */
+/* A pretend window.PocketCloud (the real one is web/sync.js), so these tests never use the internet. */
+function fakeCloud(w, { signedIn = false, verified = true, fail = null } = {}) {
+  const calls = [];
+  const c = {
+    available: true, signedIn, verified, email: signedIn ? 'me@example.com' : '',
+    info: () => ({ status: 'ready', signedIn: c.signedIn, email: c.email, verified: c.verified }),
+    onChange: () => () => {}, start: () => {},
+    signUp: async (email, password) => { calls.push(['signUp', email, password]); if (fail) throw { code: fail }; Object.assign(c, { signedIn: true, email, verified: false }); },
+    signIn: async (method, o) => { calls.push(['signIn', method, o.email, o.password]); if (fail) throw { code: fail }; Object.assign(c, { signedIn: true, email: o.email }); },
+    signOut: async () => { calls.push(['signOut']); c.signedIn = false; },
+    resetPassword: async (email) => { calls.push(['reset', email]); },
+    sendVerification: async () => { calls.push(['verify']); },
+    refresh: async () => { calls.push(['refresh']); c.verified = true; },
+    deleteAccount: async (pw) => { calls.push(['delete', pw]); if (fail) throw { code: fail }; c.signedIn = false; },
+    friendlyError: (e) => ({ 'auth/invalid-credential': 'Wrong email or password.', 'auth/email-already-in-use': 'There’s already an account with this email.' }[e.code] || 'Something went wrong. Try again.'),
+  };
+  w.PocketCloud = c;
+  return { c, calls };
+}
+const tick = () => new Promise((r) => setTimeout(r, 0)); // let the async click handlers finish
+const red = (doc, id) => doc.querySelector('#' + id).getAttribute('aria-invalid') === 'true';
+const errText = (doc, id) => doc.querySelector(`#${id}-err`).textContent;
+function openForm(L, doc, button) { L.ui.view = 'settings'; L.render(); doc.querySelector(button).click(); }
+function fill(doc, values) { for (const [id, v] of Object.entries(values)) doc.querySelector('#' + id).value = v; }
+
+describe('sync & account', () => {
+  test('without sync.js, there is no Sync section or home button, and Settings still works', (t) => {
+    const { L, doc, close } = makeApp(); t.after(close);
+    L.render();
+    assert.equal(doc.querySelector('.cloud-btn'), null);
+    L.ui.view = 'settings'; L.render();
+    assert.ok(doc.querySelector('#backup'));
+    assert.equal(doc.querySelector('#cloudUp'), null);
+    assert.match(doc.body.textContent, /Everything is stored only on this device/);
+  });
+
+  test('the home page has a Sign in button that opens the form, and shows Account once signed in', async (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    fakeCloud(w);
+    L.render();
+    doc.querySelector('#cloudHead').click();
+    assert.match(doc.querySelector('#overlay h2').textContent, /Sign in/);
+    fill(doc, { ce: 'me@example.com', cp: 'whatever1' });
+    doc.querySelector('#cgo').click(); await tick();
+    assert.equal(doc.querySelector('#cloudHead'), null);
+    assert.match(doc.querySelector('.cloud-btn.on').getAttribute('aria-label'), /me@example.com/);
+  });
+
+  test('creating an account sends the email and password and closes the form', async (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    const { calls } = fakeCloud(w);
+    openForm(L, doc, '#cloudUp');
+    fill(doc, { ce: ' me@example.com ', cp: 'secret123', cp2: 'secret123' });
+    doc.querySelector('#cgo').click(); await tick();
+    assert.deepEqual(calls[0], ['signUp', 'me@example.com', 'secret123']); // an email box drops the spaces itself
+    assert.equal(doc.querySelector('#overlay'), null);
+    assert.match(doc.body.textContent, /me@example.com/);
+    assert.doesNotMatch(doc.body.textContent, /Your data never leaves your device/);
+  });
+
+  test('a weak password is stopped before asking Firebase, and the rules show what is missing', (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    const { calls } = fakeCloud(w);
+    openForm(L, doc, '#cloudUp');
+    fill(doc, { ce: 'me@example.com', cp: 'abcdefgh', cp2: 'abcdefgh' }); // long enough, but no number
+    doc.querySelector('#cp').dispatchEvent(new w.Event('input'));
+    assert.deepEqual([...doc.querySelectorAll('#pwRules li')].map((li) => li.className), ['ok', 'ok', '']);
+    doc.querySelector('#cgo').click();
+    assert.equal(calls.length, 0);
+    assert.ok(red(doc, 'cp'));
+    assert.match(doc.querySelectorAll('#pwRules li')[2].className, /bad/);
+  });
+
+  test('the two passwords must match', (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    const { calls } = fakeCloud(w);
+    openForm(L, doc, '#cloudUp');
+    fill(doc, { ce: 'me@example.com', cp: 'secret123', cp2: 'secret124' });
+    doc.querySelector('#cgo').click();
+    assert.equal(calls.length, 0);
+    assert.ok(red(doc, 'cp2'));
+    assert.ok(!red(doc, 'cp'));
+    assert.match(errText(doc, 'cp2'), /don’t match/);
+  });
+
+  test('a badly typed or empty email is marked red under the email box', (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    const { calls } = fakeCloud(w);
+    openForm(L, doc, '#cloudIn');
+    doc.querySelector('#cgo').click();
+    assert.equal(calls.length, 0);
+    assert.match(errText(doc, 'ce'), /Enter your email/);
+    assert.match(errText(doc, 'cp'), /Enter your password/);
+    fill(doc, { ce: 'me@example', cp: 'x' });
+    doc.querySelector('#cgo').click();
+    assert.ok(red(doc, 'ce'));
+    assert.match(errText(doc, 'ce'), /doesn’t look right/);
+    assert.equal(calls.length, 0);
+  });
+
+  test('a wrong password turns both boxes red, and typing again clears it', async (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    fakeCloud(w, { fail: 'auth/invalid-credential' });
+    openForm(L, doc, '#cloudIn');
+    fill(doc, { ce: 'me@example.com', cp: 'nope' });
+    doc.querySelector('#cgo').click(); await tick();
+    assert.ok(doc.querySelector('#overlay'), 'the form should stay open');
+    assert.ok(red(doc, 'ce') && red(doc, 'cp'));
+    assert.match(doc.querySelector('.form-error').textContent, /Wrong email or password/);
+    assert.equal(doc.querySelector('#cgo').disabled, false);
+    doc.querySelector('#cp').dispatchEvent(new w.Event('input'));
+    assert.ok(!red(doc, 'ce') && !red(doc, 'cp'));
+    assert.equal(doc.querySelector('.form-error').hidden, true);
+  });
+
+  test('an email that already has an account is shown under the email box', async (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    fakeCloud(w, { fail: 'auth/email-already-in-use' });
+    openForm(L, doc, '#cloudUp');
+    fill(doc, { ce: 'me@example.com', cp: 'secret123', cp2: 'secret123' });
+    doc.querySelector('#cgo').click(); await tick();
+    assert.ok(red(doc, 'ce'));
+    assert.match(errText(doc, 'ce'), /already an account/);
+  });
+
+  test('the eye button shows and hides the password', (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    fakeCloud(w);
+    openForm(L, doc, '#cloudIn');
+    const eye = doc.querySelector('[data-eye="cp"]');
+    eye.click();
+    assert.equal(doc.querySelector('#cp').type, 'text');
+    assert.equal(eye.getAttribute('aria-pressed'), 'true');
+    eye.click();
+    assert.equal(doc.querySelector('#cp').type, 'password');
+  });
+
+  test('forgot password sends a reset email and says so without telling if the account exists', async (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    const { calls } = fakeCloud(w);
+    openForm(L, doc, '#cloudIn');
+    doc.querySelector('#cforgot').click();
+    assert.equal(calls.length, 0);
+    assert.ok(red(doc, 'ce'));
+    fill(doc, { ce: 'me@example.com' });
+    doc.querySelector('#cforgot').click(); await tick();
+    assert.deepEqual(calls[0], ['reset', 'me@example.com']);
+    assert.match(doc.querySelector('.form-error.ok').textContent, /If me@example.com has an account/);
+  });
+
+  test('an unconfirmed email can be confirmed or the link sent again', async (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    const { calls } = fakeCloud(w, { signedIn: true, verified: false });
+    L.ui.view = 'settings'; L.render();
+    assert.match(doc.body.textContent, /email not confirmed yet/);
+    doc.querySelector('#cloudResend').click(); await tick();
+    doc.querySelector('#cloudCheck').click(); await tick();
+    assert.deepEqual(calls.map((c) => c[0]), ['verify', 'refresh']);
+    assert.doesNotMatch(doc.body.textContent, /email not confirmed yet/);
+  });
+
+  test('signing out keeps all the data on this device', async (t) => {
+    const { L, S, w, doc, add, close } = makeApp(); t.after(close);
+    const { calls } = fakeCloud(w, { signedIn: true });
+    add({ type: 'expense', amount: 100, date: '2026-10-07' });
+    L.ui.view = 'settings'; L.render();
+    doc.querySelector('#cloudOut').click(); await tick();
+    assert.deepEqual(calls[0], ['signOut']);
+    assert.equal(S.transactions.length, 1);
+    assert.ok(doc.querySelector('#cloudUp'), 'shows the sign-in buttons again');
+  });
+
+  test('deleting the account asks for the password first, and a wrong one is marked red', async (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    const { calls } = fakeCloud(w, { signedIn: true, fail: 'auth/invalid-credential' });
+    L.ui.view = 'settings'; L.render();
+    doc.querySelector('#cloudDel').click();
+    doc.querySelector('#dgo').click();
+    assert.equal(calls.length, 0);
+    assert.ok(red(doc, 'dp'));
+    fill(doc, { dp: 'wrong123' });
+    doc.querySelector('#dgo').click(); await tick();
+    assert.deepEqual(calls[0], ['delete', 'wrong123']);
+    assert.equal(errText(doc, 'dp'), 'Wrong password.');
+  });
+});

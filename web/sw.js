@@ -7,13 +7,15 @@
  *
  * Bump CACHE_VERSION whenever you add or rename files in APP_FILES.
  */
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const CACHE_NAME = `pocket-ledger-${CACHE_VERSION}`;
 const APP_FILES = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './firebase-config.js',
+  './sync.js',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',

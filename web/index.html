@@ -26,10 +26,15 @@
 <div id="root"></div>
 <div id="tip" role="tooltip"></div>
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>
+<!-- Optional sync: firebase-config.js + sync.js only define window.PocketCloud; Firebase itself loads later, and only if needed -->
+<script src="firebase-config.js"></script>
+<script src="sync.js"></script>
 <script src="app.js"></script>
 <script>
-  // Register the service worker (only on http/https, not inside the .exe or the Android app)
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !window.Capacitor?.isNativePlatform?.()) {
+  // Register the service worker (only on http/https, not inside the .exe or the Android app).
+  // The .exe serves the app from http://127.0.0.1:47613 (see main.py), so skip that address too.
+  const insideExe = location.hostname === '127.0.0.1' && location.port === '47613';
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !insideExe && !window.Capacitor?.isNativePlatform?.()) {
     navigator.serviceWorker.register('sw.js');
   }
   // Ask the browser to keep our data even when the phone is low on space

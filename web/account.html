@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The email links carry a one-time code in the address: don't send it to other sites, don't list this page in search -->
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<title>Pocket Ledger account</title>
+<meta name="theme-color" content="#12302a">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+<style>
+  /* This page opens from the "reset password" and "confirm email" links Firebase emails. */
+  html, body { height: auto; min-height: 100%; touch-action: auto; }
+  .acct-page { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
+  .acct-card { width: min(420px, 100%); }
+  .acct-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+  .acct-brand svg { width: 36px; height: 36px; }
+  .acct-brand span { font-family: var(--num); font-size: 19px; }
+  .acct-card h1 { font-family: var(--num); font-weight: 400; font-size: 24px; margin: 0 0 4px; }
+  .acct-card .panel { padding: 22px; }
+  .acct-done { display: flex; gap: 12px; align-items: flex-start; }
+  .acct-done svg { width: 30px; height: 30px; flex: none; }
+  .acct-done.good svg { color: var(--good); }
+  .acct-done.bad svg { color: var(--danger); }
+  .acct-done p { margin: 4px 0 0; color: var(--ink-2); }
+  .acct-foot { text-align: center; margin-top: 14px; font-size: 12.5px; color: var(--muted); }
+  .acct-foot a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main class="acct-page">
+  <div class="acct-card">
+    <div class="acct-brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="6" width="28" height="20" rx="5" fill="#5fd3b8"/><rect x="2" y="11" width="28" height="4" fill="#12302a" opacity=".35"/><rect x="18" y="17" width="12" height="7" rx="3.5" fill="#12302a"/><circle cx="22" cy="20.5" r="1.6" fill="#5fd3b8"/></svg>
+      <span>Pocket Ledger</span>
+    </div>
+    <div class="panel" id="box" aria-live="polite"><p class="hint" style="margin:0">Checking your link…</p></div>
+    <p class="acct-foot">Questions? See the <a href="privacy.html">privacy policy</a>.</p>
+  </div>
+</main>
+<script src="firebase-config.js"></script>
+<script type="module" src="account.js"></script>
+</body>
+</html>
