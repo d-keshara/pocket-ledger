@@ -188,8 +188,14 @@ function postDueRecurring() {
     while (r.active && r.nextDate <= t && guard++ < 400) {
       // The id comes from the payment and its date, not uid(): two synced devices posting the same rent
       // on the same day then make the same transaction instead of two.
-      state.transactions.push({ id: `${r.id}-${r.nextDate}`, type: r.type, amount: r.amount, date: r.nextDate, categoryId: r.categoryId, accountId: r.accountId, note: r.note, recurringId: r.id });
-      r.nextDate = nextOccurrence(r, r.nextDate); n++;
+      const id = `${r.id}-${r.nextDate}`;
+      // Already posted (e.g. "Next date" was moved back to a date that was posted before)? Don't add it twice.
+      // auto: posted by the app and not edited since (editing it builds a new record without this flag).
+      if (!state.transactions.some((x) => x.id === id)) {
+        state.transactions.push({ id, type: r.type, amount: r.amount, date: r.nextDate, categoryId: r.categoryId, accountId: r.accountId, note: r.note, recurringId: r.id, auto: true });
+        n++;
+      }
+      r.nextDate = nextOccurrence(r, r.nextDate);
     }
   }
   if (n) { save(); setTimeout(() => toast(`Added ${n} scheduled transaction${n > 1 ? 's' : ''}`), 400); }
@@ -1102,6 +1108,23 @@ function cloudPanel() {
   }
   return `<div class="panel" style="margin-top:18px"><h2>Sync &amp; account</h2><div class="stack">${body}</div></div>`;
 }
+/* Redraws now, or once the person has finished typing in a box / closed the open window,
+   so data arriving from another device never wipes what they're typing. */
+const isTyping = () => { const a = document.activeElement; return !!(a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && a.closest('#root')); };
+function renderSoon() { if ($('#overlay') || isTyping()) ui.renderLater = true; else render(); }
+document.addEventListener('focusout', () => setTimeout(() => {
+  if (ui.renderLater && !$('#overlay') && !isTyping()) { ui.renderLater = false; render(); }
+}, 0));
+/* Something about the account changed. Signing in or out changes the whole page; a sync status change
+   ("Syncing…" → "Synced") only updates the status line and the home button, not the whole page. */
+let cloudSeen = '';
+function onCloudChange() {
+  const i = cloud()?.info(); if (!i) return;
+  const who = [i.signedIn, i.email, i.verified, i.status].join('|');
+  if (who !== cloudSeen) { cloudSeen = who; return renderSoon(); }
+  const line = $('.sync-line'); if (line) line.outerHTML = syncLine(i.sync);
+  $('.cloud-btn.on')?.classList.toggle('warn', ['offline', 'error'].includes(i.sync?.state));
+}
 /* "Synced at 18:42", "Waiting for internet", ... */
 function syncLine(s = {}) {
   const at = s.lastSynced ? new Date(s.lastSynced).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
@@ -1565,11 +1588,11 @@ async function boot() {
   hideSplash();
   // Sync is optional: if anything in it fails, the app carries on without it.
   try {
-    cloud()?.onChange(() => { if (!$('#overlay')) render(); }); // the home page button and Settings show the account
+    cloud()?.onChange(onCloudChange); // the home page button and Settings show the account
     cloud()?.attach({
       getState: () => state,
       // Changes from another device (or the first download): keep them and show them.
-      setState: (s) => { state = s; save(); if ($('#overlay')) ui.renderLater = true; else render(); },
+      setState: (s) => { state = s; save(); renderSoon(); },
       merge: (mine, theirs) => mergeStates(mine, migrate(JSON.parse(JSON.stringify(theirs)))).state,
       migrate,
       confirmMerge,
@@ -1589,7 +1612,7 @@ if (window.__LEDGER_TEST__) {
     defaultState, migrate, mergeStates, restoreBox, mergeSummary, render, money, esc, addDays, addMonths, daysBetween, weekStartOf, toISO, parseISO,
     weekInfo, accountBalance, totalBalance, postDueRecurring, nextOccurrence, budgetStatus, filteredTx,
     periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner,
-    cloudPanel, accountForm, confirmMerge, syncLine, backupDue, saveBackup, snoozeBackup, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
+    cloudPanel, accountForm, confirmMerge, syncLine, onCloudChange, renderSoon, backupDue, saveBackup, snoozeBackup, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
   };
 } else {
   let booted = false;

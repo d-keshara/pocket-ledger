@@ -925,3 +925,52 @@ describe('sync screens', () => {
     assert.equal(doc.querySelector('#overlay'), null);
   });
 });
+
+describe('fixes from the bug review', () => {
+  test('moving a scheduled payment back to a date already posted does not post it twice', (t) => {
+    const { L, S, cash, expenseCat, close } = makeApp(); t.after(close);
+    S.recurring.push({ id: 'r1', type: 'expense', amount: 900, note: 'Rent', categoryId: expenseCat('Rent').id, frequency: 'monthly', nextDate: '2026-10-01', anchorDay: 1, accountId: cash.id, active: true });
+    L.postDueRecurring();
+    S.recurring[0].nextDate = '2026-10-01'; // moved back
+    L.postDueRecurring();
+    assert.deepEqual([...S.transactions.map((x) => x.id)], ['r1-2026-10-01']);
+    assert.equal(S.recurring[0].nextDate, '2026-11-01');
+  });
+
+  test('a payment the app posted is marked, and editing it removes the mark', (t) => {
+    const { L, S, doc, cash, expenseCat, close } = makeApp(); t.after(close);
+    S.recurring.push({ id: 'r1', type: 'expense', amount: 900, note: 'Rent', categoryId: expenseCat('Rent').id, frequency: 'monthly', nextDate: '2026-10-01', anchorDay: 1, accountId: cash.id, active: true });
+    L.postDueRecurring();
+    assert.equal(S.transactions[0].auto, true);
+    L.txForm(S.transactions[0]);
+    doc.querySelector('#fSave').click();
+    assert.equal(S.transactions[0].auto, undefined);
+    assert.equal(S.transactions[0].recurringId, 'r1');
+  });
+
+  test('a sync status change does not wipe what someone is typing', (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    const { c } = fakeCloud(w, { signedIn: true });
+    let sync = { state: 'syncing' };
+    c.info = () => ({ status: 'ready', signedIn: true, email: 'me@example.com', verified: true, sync });
+    L.ui.view = 'settings'; L.render();
+    L.onCloudChange(); // the first call just notes who is signed in
+    const name = doc.querySelector('#sName');
+    name.focus(); name.value = 'Half typed';
+    sync = { state: 'synced', lastSynced: Date.now() };
+    L.onCloudChange();
+    assert.equal(doc.querySelector('#sName'), name, 'the same box, not redrawn');
+    assert.equal(name.value, 'Half typed');
+    assert.match(doc.querySelector('.sync-line').textContent, /Synced/);
+  });
+
+  test('data from another device waits until the person stops typing', (t) => {
+    const { L, doc, close } = makeApp(); t.after(close);
+    L.ui.view = 'settings'; L.render();
+    const name = doc.querySelector('#sName');
+    name.focus(); name.value = 'Half typed';
+    L.renderSoon();
+    assert.equal(doc.querySelector('#sName'), name, 'not redrawn while typing');
+    assert.equal(name.value, 'Half typed');
+  });
+});

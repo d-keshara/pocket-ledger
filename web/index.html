@@ -33,8 +33,8 @@
 <script src="app.js"></script>
 <script>
   // Register the service worker (only on http/https, not inside the .exe or the Android app).
-  // The .exe serves the app from http://127.0.0.1:47613 (see main.py), so skip that address too.
-  const insideExe = location.hostname === '127.0.0.1' && location.port === '47613';
+  // The .exe serves the app from http://127.0.0.1 on a port from 47613 to 47622 (see PORTS in main.py), so skip those too.
+  const insideExe = location.hostname === '127.0.0.1' && +location.port >= 47613 && +location.port <= 47622;
   if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !insideExe && !window.Capacitor?.isNativePlatform?.()) {
     navigator.serviceWorker.register('sw.js');
   }

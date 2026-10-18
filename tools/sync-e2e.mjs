@@ -79,6 +79,17 @@ try {
   assert.equal(after.records.transactions.t1, undefined);
   ok('a deleted transaction is gone for the other device');
 
+  // A goal deleted on one device while another (offline) device added money comes back with the whole amount.
+  await A.commit({ upserts: [], deletes: [{ list: 'goals', id: 'g1' }] });
+  await A2.commit({ upserts: [{ list: 'goals', id: 'g1', data: { id: 'g1', name: 'Bike', target: 5000, deadline: '' }, savedDelta: 200, total: 1900 }], deletes: [] });
+  assert.equal((await A.getOne('goals', 'g1')).saved, 1900);
+  assert.equal((await A.getOne('goals', 'g1'))._del, undefined);
+  ok('a deleted goal topped up on another device comes back with its whole amount (1900, not 200)');
+
+  const readyAfter = await new Promise((resolve) => { const t0 = Date.now(); const stop = A2.listen(0, () => {}, (e) => resolve(e), () => { stop(); resolve(Date.now() - t0); }); });
+  assert.equal(typeof readyAfter, 'number', 'listener error: ' + readyAfter?.code);
+  ok(`the listener says it is ready once it has sent what was there (${readyAfter} ms)`);
+
   console.log('Security rules:');
   const theirs = F.doc(b.db, 'users', ua.uid, 'transactions', 't2');
   await refused('B reads A’s transaction', F.getDoc(theirs));

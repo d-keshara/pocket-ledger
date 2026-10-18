@@ -187,6 +187,8 @@ function pretendCloud() {
   }, 1);
   return {
     docs, reads: () => reads,
+    /* The connection breaks: every listener of this account gets an error and stops (like Firestore). */
+    breakListeners(uid) { for (const l of [...listeners]) if (l.uid === uid) { listeners.delete(l); l.onError({ code: 'unavailable' }); } },
     count: (uid, list) => [...docs.entries()].filter(([k, d]) => k.startsWith(`${uid}/${list}/`) && !d._del).length,
     adapter(uid) {
       const key = (list, id) => `${uid}/${list}/${id}`;
@@ -202,13 +204,14 @@ function pretendCloud() {
           return { records, settings, maxAt };
         },
         // Like a Firestore query "changed after `since`": first sends what already matches, then new changes.
-        listen(since, onDocs) {
-          const l = { uid, since, onDocs }; listeners.add(l);
+        listen(since, onDocs, onError, onReady = () => {}) {
+          const l = { uid, since, onDocs, onError }; listeners.add(l);
           setTimeout(() => {
             for (const [k, d] of docs) {
               const [u, list, id] = k.split('/');
               if (u === uid && d._at.toMillis() > since && listeners.has(l)) { reads++; onDocs(list, [{ id, data: { ...d } }]); }
             }
+            if (listeners.has(l)) onReady();
           }, 1);
           return () => listeners.delete(l);
         },
@@ -218,8 +221,9 @@ function pretendCloud() {
             const k = key(u.list, u.id); const old = docs.get(k) || {};
             let data;
             if (u.list === 'goals' && !('saved' in u.data)) {
-              data = { ...old, ...u.data, _at: stamp() }; delete data._del;
-              data.saved = Math.round(((old.saved || 0) + (u.savedDelta || 0)) * 100) / 100;
+              // like the real adapter's transaction: add the change, or bring a deleted goal back whole
+              if (docs.has(k) && !old._del) data = { ...old, ...u.data, _at: stamp(), saved: Math.round(((old.saved || 0) + (u.savedDelta || 0)) * 100) / 100 };
+              else data = { ...u.data, saved: u.total || 0, _at: stamp() };
             } else data = { ...u.data, _at: stamp() };
             docs.set(k, data); tell(uid, u.list, u.id, data);
           }
@@ -232,14 +236,14 @@ function pretendCloud() {
   };
 }
 
-function device(cloud, { uid = 'u1', store = new Map(), confirm = true, now } = {}) {
+function device(cloud, { uid = 'u1', store = new Map(), confirm = true, now, ask } = {}) {
   const { L, close } = makeAppState(now);
   const hooks = {
     getState: () => L.state,
     setState: (s) => { L.state = s; },
     merge: (mine, theirs) => L.mergeStates(mine, L.migrate(JSON.parse(JSON.stringify(theirs)))).state,
     migrate: L.migrate,
-    confirmMerge: async () => confirm,
+    confirmMerge: ask || (async () => confirm),
     isOnline: () => true,
   };
   const keep = {
@@ -252,6 +256,8 @@ function device(cloud, { uid = 'u1', store = new Map(), confirm = true, now } = 
   const d = {
     L, store, get S() { return L.state; },
     async signIn(asUid = uid) { engine = createEngine({ api: cloud.adapter(asUid), hooks, store: keep, uid: asUid, debounceMs: 3, retryMs: 20, overlapMs: 0 }); await engine.start(); await settle(); },
+    startSignIn(asUid = uid) { engine = createEngine({ api: cloud.adapter(asUid), hooks, store: keep, uid: asUid, debounceMs: 3, retryMs: 20, overlapMs: 0 }); return engine.start(); },
+    get engine() { return engine; },
     edit(fn) { fn(L.state); engine.changed(); },
     signOut() { engine.stop(); },
     close() { engine?.stop(); close(); },
@@ -385,5 +391,111 @@ describe('sync: two devices, one account', () => {
     await assert.rejects(() => a.signIn('u2'), (e) => e.code === 'sync/cancelled');
     assert.equal(cloud.count('u2', 'transactions'), 1, 'u2 was not given this device’s data');
     assert.ok(!cloud.docs.has('u2/transactions/mine'));
+  });
+});
+
+describe('sync: fixes from the bug review', () => {
+  test('signing in to a NEW, empty account asks before adding the last account’s data to it', async (t) => {
+    const cloud = pretendCloud(); const store = new Map();
+    const a = device(cloud, { store, confirm: false }); t.after(() => a.close());
+    a.S.transactions.push(tx('private', 99));
+    await a.signIn('u1'); a.signOut();
+    await assert.rejects(() => a.signIn('u2'), (e) => e.code === 'sync/cancelled');
+    assert.equal(cloud.count('u2', 'transactions'), 0, 'nothing of u1 went into u2');
+    assert.equal(cloud.count('u2', 'categories'), 0);
+  });
+
+  test('nothing is sent while the person is still answering the question', async (t) => {
+    const cloud = pretendCloud(); const store = new Map();
+    let answer; const asked = new Promise((r) => { answer = r; });
+    let opened; const questionOpen = new Promise((r) => { opened = r; });
+    const a = device(cloud, { store, ask: () => { opened(); return asked; } }); t.after(() => a.close());
+    a.S.transactions.push(tx('private', 99));
+    await a.signIn('u1'); a.signOut();
+    const starting = a.startSignIn('u2').catch((e) => e);
+    await questionOpen;
+    a.engine.push(); a.engine.changed(); // e.g. the internet came back while the question is open
+    await settle();
+    assert.equal(cloud.count('u2', 'transactions'), 0, 'not sent before answering');
+    answer(false);
+    assert.equal((await starting).code, 'sync/cancelled');
+    await settle();
+    assert.equal(cloud.count('u2', 'transactions'), 0, 'and not after answering no');
+  });
+
+  test('a goal deleted on one device and topped up on an offline one comes back with its whole amount', async (t) => {
+    const cloud = pretendCloud(); const store = new Map();
+    const a = device(cloud); const b = device(cloud, { store }); t.after(() => { a.close(); b.close(); });
+    a.S.goals.push({ id: 'g1', name: 'Bike', target: 5000, saved: 1000, deadline: '' });
+    await a.signIn(); await b.signIn();
+    b.signOut(); // b goes offline
+    a.edit((s) => { s.goals = []; });
+    await settle();
+    b.S.goals[0].saved = 1200; // b adds 200 while offline
+    await b.signIn();
+    await settle();
+    assert.equal(b.S.goals[0].saved, 1200, 'not just the 200');
+    assert.equal(cloud.docs.get('u1/goals/g1').saved, 1200);
+    assert.equal(a.S.goals[0].saved, 1200);
+  });
+
+  test('if the live connection breaks, it reconnects and changes keep arriving', async (t) => {
+    const cloud = pretendCloud();
+    const a = device(cloud); const b = device(cloud); t.after(() => { a.close(); b.close(); });
+    await a.signIn(); await b.signIn();
+    cloud.breakListeners('u1');
+    await settle(); await settle();
+    a.edit((s) => s.transactions.push(tx('after', 5)));
+    await settle(); await settle();
+    assert.deepEqual(ids(b.S.transactions), ['after']);
+  });
+
+  test('a payment posted by an offline device does not undo an edit or delete made on another device', async (t) => {
+    const cloud = pretendCloud(); const store = new Map();
+    const a = device(cloud); const b = device(cloud, { store }); t.after(() => { a.close(); b.close(); });
+    const rent = (s) => ({ id: 'r1', type: 'expense', amount: 50000, note: 'Rent', categoryId: s.categories[0].id, frequency: 'monthly', nextDate: '2026-10-01', anchorDay: 1, accountId: s.accounts[0].id, active: true });
+    a.S.recurring.push(rent(a.S));
+    await a.signIn(); await b.signIn();
+    b.signOut(); // b is offline
+    a.edit(() => a.L.postDueRecurring());
+    await settle();
+    a.edit((s) => { s.transactions[0].amount = 48000; }); // the rent was a bit less this month
+    await settle();
+    b.L.postDueRecurring(); // b posts the same rent by itself, with the old amount
+    await b.signIn();
+    await settle(); await settle();
+    assert.equal(b.S.transactions.length, 1);
+    assert.equal(b.S.transactions[0].amount, 48000, 'b took the edit');
+    assert.equal(cloud.docs.get('u1/transactions/r1-2026-10-01').amount, 48000, 'and did not overwrite it');
+  });
+
+  test('sync notes saved by the older version are converted, so nothing is sent again or overwritten', async (t) => {
+    const cloud = pretendCloud(); const store = new Map();
+    const a = device(cloud); const b = device(cloud, { store }); t.after(() => { a.close(); b.close(); });
+    a.S.transactions.push(tx('t1', 100));
+    await a.signIn(); await b.signIn();
+    b.signOut();
+    // turn b's notes into the old format: whole texts instead of fingerprints
+    const meta = JSON.parse(store.get('meta:u1'));
+    for (const k of Object.keys(meta.snapshot)) if (!k.startsWith('goals/')) meta.snapshot[k] = stable(k === 'settings/main'
+      ? Object.fromEntries(Object.entries(b.S.settings).filter(([f]) => !['lastBackup', 'backupSnoozeUntil', 'theme'].includes(f)))
+      : b.S[k.split('/')[0]].find((x) => x.id === k.slice(k.indexOf('/') + 1)));
+    store.set('meta:u1', JSON.stringify(meta));
+    a.edit((s) => { s.transactions[0].amount = 250; }); // changed on a while b was closed
+    await settle();
+    await b.signIn();
+    await settle();
+    assert.equal(b.S.transactions[0].amount, 250, 'b took the newer edit');
+    assert.equal(cloud.docs.get('u1/transactions/t1').amount, 250, 'and did not overwrite it with its old copy');
+  });
+
+  test('the sync notes are much smaller than the data itself', async (t) => {
+    const cloud = pretendCloud(); const store = new Map();
+    const a = device(cloud, { store }); t.after(() => a.close());
+    for (let i = 0; i < 500; i++) a.S.transactions.push(tx('t' + i, i, { note: 'Groceries at the market, weekly shop' }));
+    await a.signIn();
+    const dataSize = JSON.stringify(a.S).length;
+    const notesSize = store.get('meta:u1').length;
+    assert.ok(notesSize < dataSize * 0.5, `notes ${notesSize} vs data ${dataSize}`);
   });
 });
