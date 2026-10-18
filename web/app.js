@@ -603,10 +603,10 @@ function viewDashboard() {
     ${alertHtml}
     ${backupCard()}
     <div class="stats">
-      <div class="stat"><div class="k">Total balance</div><div class="v">${moneyHtml(totalBalance())}</div><div class="d">${state.accounts.length} account${state.accounts.length === 1 ? '' : 's'}</div></div>
+      <div class="stat"><div class="k">Total balance</div><div class="v ${totalBalance() < 0 ? 'neg' : ''}">${moneyHtml(totalBalance())}</div><div class="d">${state.accounts.length} account${state.accounts.length === 1 ? '' : 's'}</div></div>
       <div class="stat"><div class="k">Income in ${MONTH_SHORT[now().getMonth()]}</div><div class="v pos">${moneyHtml(mInc)}</div><div class="d">${plural(incomeIn(mFrom, mTo).length, 'payment')}</div></div>
-      <div class="stat"><div class="k">Spent in ${MONTH_SHORT[now().getMonth()]}</div><div class="v">${moneyHtml(mExp)}</div><div class="d">${money(mExp / Math.max(1, parseISO(t).getDate()), { short: true })} a day on average</div></div>
-      <div class="stat"><div class="k">Kept this month</div><div class="v ${saved < 0 ? 'neg' : ''}">${moneyHtml(saved)}</div><div class="d">${mInc ? Math.round(saved / mInc * 100) + '% of income' : 'Add income to see your savings rate'}</div></div>
+      <div class="stat"><div class="k">Spent in ${MONTH_SHORT[now().getMonth()]}</div><div class="v neg">${moneyHtml(mExp)}</div><div class="d">${money(mExp / Math.max(1, parseISO(t).getDate()), { short: true })} a day on average</div></div>
+      <div class="stat"><div class="k">Kept this month</div><div class="v ${saved < 0 ? 'neg' : ''}">${moneyHtml(saved)}</div><div class="d">${mInc ? `<span class="${saved > 0 ? 'pos' : saved < 0 ? 'neg' : ''}">${Math.round(saved / mInc * 100)}% of income</span>` : 'Add income to see your savings rate'}</div></div>
     </div>
     <div class="cols">
       <div class="panel"><h2>Where this week’s money went <small>${money(sum(weekEx, (x) => x.amount))}</small></h2>
@@ -977,8 +977,8 @@ function viewReports() {
     <div class="seg" id="rp">${periods.map(([v, l]) => `<button data-v="${v}" class="${p === v ? 'on' : ''}">${l}</button>`).join('')}</div></div>
     <div class="stats" style="margin-top:0">
       <div class="stat"><div class="k">Income</div><div class="v pos">${moneyHtml(tIn)}</div><div class="d">${plural(inc.length, 'payment')}</div></div>
-      <div class="stat"><div class="k">Expenses</div><div class="v">${moneyHtml(tEx)}</div><div class="d">${plural(ex.length, 'purchase')}</div></div>
-      <div class="stat"><div class="k">Kept</div><div class="v ${tIn - tEx < 0 ? 'neg' : ''}">${moneyHtml(tIn - tEx)}</div><div class="d">${tIn ? Math.round((tIn - tEx) / tIn * 100) + '% savings rate' : 'No income in this period'}</div></div>
+      <div class="stat"><div class="k">Expenses</div><div class="v neg">${moneyHtml(tEx)}</div><div class="d">${plural(ex.length, 'purchase')}</div></div>
+      <div class="stat"><div class="k">Kept</div><div class="v ${tIn - tEx < 0 ? 'neg' : ''}">${moneyHtml(tIn - tEx)}</div><div class="d">${tIn ? `<span class="${tIn - tEx > 0 ? 'pos' : tIn - tEx < 0 ? 'neg' : ''}">${Math.round((tIn - tEx) / tIn * 100)}% savings rate</span>` : 'No income in this period'}</div></div>
       <div class="stat"><div class="k">Average day</div><div class="v">${moneyHtml(tEx / days, { short: true })}</div><div class="d">across ${days} day${days > 1 ? 's' : ''}</div></div>
     </div>
     <div class="cols">
