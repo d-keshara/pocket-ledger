@@ -7,7 +7,7 @@
  *
  * Bump CACHE_VERSION whenever you add or rename files in APP_FILES.
  */
-const CACHE_VERSION = 'v5';
+const CACHE_VERSION = 'v6';
 const CACHE_NAME = `pocket-ledger-${CACHE_VERSION}`;
 const APP_FILES = [
   './',
