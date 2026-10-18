@@ -100,6 +100,7 @@ function save() {
       if (hasApi()) await window.pywebview.api.save_data(state);
       else localStorage.setItem('pocket-ledger', JSON.stringify(state));
     } catch (e) { toast('Could not save your data: ' + e); }
+    try { cloud()?.changed(); } catch (e) { console.error('Sync', e); } // signed in: send the change to the cloud
   }, 150);
 }
 async function loadState() {
@@ -279,9 +280,9 @@ function toast(msg, action) {
 }
 
 /* ================= modal ================= */
-function openModal({ title, body, foot, onMount, wide }) {
+function openModal({ title, body, foot, onMount, wide, onClose }) {
   closeModal();
-  const ov = document.createElement('div'); ov.className = 'overlay'; ov.id = 'overlay';
+  const ov = document.createElement('div'); ov.className = 'overlay'; ov.id = 'overlay'; ov._onClose = onClose;
   ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}" ${wide ? 'style="width:min(680px,100%)"' : ''}>
     <div class="modal-head"><h2>${esc(title)}</h2><button class="icon-btn" data-close aria-label="Close">${icon('x')}</button></div>
     <div class="modal-body">${body}</div>
@@ -294,7 +295,12 @@ function openModal({ title, body, foot, onMount, wide }) {
   f?.focus(); f?.select?.();
   return ov;
 }
-function closeModal() { $('#overlay')?.remove(); }
+function closeModal() {
+  const ov = $('#overlay'); if (!ov) return;
+  ov.remove(); ov._onClose?.();
+  // Data that arrived from another device while this was open: show it now.
+  if (ui.renderLater) { ui.renderLater = false; render(); }
+}
 function confirmBox(title, text, okLabel, onOk) {
   openModal({
     title, body: `<p style="margin:0">${text}</p>`,
@@ -1071,8 +1077,9 @@ const emailLooksOk = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
 function cloudButton() {
   const c = cloud(); if (!c) return '';
   const i = c.info();
+  const warn = ['offline', 'error'].includes(i.sync?.state) ? ' warn' : '';
   return i.signedIn
-    ? `<button class="btn cloud-btn on" data-go="settings" aria-label="Account: signed in as ${esc(i.email)}">${icon('cloudOk')}<span>Account</span></button>`
+    ? `<button class="btn cloud-btn on${warn}" data-go="settings" aria-label="Account: signed in as ${esc(i.email)}">${icon('cloudOk')}<span>Account</span></button>`
     : `<button class="btn cloud-btn" id="cloudHead" aria-label="Sign in or create an account">${icon('cloud')}<span>Sign in</span></button>`;
 }
 function cloudPanel() {
@@ -1082,9 +1089,9 @@ function cloudPanel() {
   let body;
   if (i.signedIn) {
     body = `<div class="acct">${icon('cloudOk')}<div><b>${esc(i.email)}</b><span>${i.verified ? 'Signed in' : 'Signed in · email not confirmed yet'}</span></div></div>
-      ${i.verified ? '' : `<div class="verify">We sent a link to <b>${esc(i.email)}</b>. Open it to confirm this email is yours (check spam too).
+      ${i.verified ? '' : `<div class="verify"><p style="margin:0">We sent a link to <b>${esc(i.email)}</b>. Open it to confirm this email is yours (check spam too).</p>
         ${row('<button class="btn small" id="cloudCheck">I’ve confirmed it</button><button class="btn small ghost" id="cloudResend">Send the link again</button>')}</div>`}
-      <p class="hint" style="margin:0">Syncing your data between devices comes in the next step. For now your data still stays on this device.</p>
+      ${syncLine(i.sync)}
       ${row(`<button class="btn" id="cloudOut">Sign out</button><button class="btn danger" id="cloudDel">${icon('trash')}Delete account</button>`)}`;
   } else if (i.status === 'loading') {
     body = '<p class="hint" style="margin:0">Starting…</p>';
@@ -1094,6 +1101,34 @@ function cloudPanel() {
       ${row(`<button class="btn primary" id="cloudUp">${icon('cloud')}Create account</button><button class="btn" id="cloudIn">Sign in</button>`)}`;
   }
   return `<div class="panel" style="margin-top:18px"><h2>Sync &amp; account</h2><div class="stack">${body}</div></div>`;
+}
+/* "Synced at 18:42", "Waiting for internet", ... */
+function syncLine(s = {}) {
+  const at = s.lastSynced ? new Date(s.lastSynced).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  const code = s.error?.code ? ` (${esc(s.error.code)})` : '';
+  const lines = {
+    starting: ['', 'Getting your data…'],
+    syncing: ['', 'Syncing…'],
+    synced: ['ok', `Synced${at ? ' at ' + at : ''}. Changes on your other devices show up here by themselves.`],
+    offline: ['', 'Waiting for internet. Your changes are saved on this device and will sync when you’re back online.'],
+    error: ['bad', `Sync problem${code}. It will try again by itself in a moment.`],
+  };
+  const [kind, text] = lines[s.state] || ['', 'Getting ready to sync…'];
+  return `<p class="sync-line ${kind}" style="margin:0">${text}</p>`;
+}
+/* Signing in to a different account than last time on this device: ask before adding this device's data to it. */
+function confirmMerge() {
+  return new Promise((resolve) => {
+    let answered = false; const answer = (yes) => { if (!answered) { answered = true; resolve(yes); } };
+    openModal({
+      title: 'Add this device’s data to the account?',
+      body: `<p style="margin:0">This device has money history from a different account. Do you want to add it to <b>${esc(cloud()?.info().email || 'this account')}</b>?</p>
+        <p class="hint" style="margin-top:10px">If you say no, you’ll be signed out and nothing is changed.</p>`,
+      foot: '<button class="btn" id="mNo">No, sign out</button><button class="btn primary" id="mYes">Yes, add it</button>',
+      onClose: () => answer(false),
+      onMount: (m) => { $('#mNo', m).onclick = () => { answer(false); closeModal(); }; $('#mYes', m).onclick = () => { answer(true); closeModal(); }; },
+    });
+  });
 }
 function bindCloud(root) {
   const c = cloud(); if (!c) return;
@@ -1224,7 +1259,7 @@ function deleteAccountBox() {
   const c = cloud();
   openModal({
     title: 'Delete your account?',
-    body: `<div class="stack"><p style="margin:0">Your account will be deleted. The data on this device stays here.</p>
+    body: `<div class="stack"><p style="margin:0">Your account <b>and everything synced to it</b> will be deleted. The data on this device stays here.</p>
       ${inputField('dp', 'Type your password to confirm', { type: 'password', ac: 'current-password', focus: true })}${FORM_MSG}</div>`,
     foot: '<button class="btn" data-close>Cancel</button><button class="btn danger" id="dgo">Delete account</button>',
     onMount: (m) => {
@@ -1285,6 +1320,7 @@ function viewWelcome() {
   const s = state.settings;
   return `<div class="welcome"><div class="welcome-inner"><div class="modal"><div class="modal-body" style="padding:30px 32px">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">${logo(40)}<div><h1>Pocket Ledger</h1><p class="muted" style="margin:0">Know what you can spend today, and make it to the end of the week.</p></div></div>
+    ${cloud() ? `<div class="have-account">${icon('cloud')}<span>Already use Pocket Ledger on another device? <button class="link-btn" id="wSignIn" type="button">Sign in</button></span></div>` : ''}
     <div class="stack">
       <label class="field"><span>What should we call you?</span><input class="input" id="wName" placeholder="Your first name" maxlength="30" autofocus></label>
       <div class="grid2"><label class="field"><span>Currency</span><select class="input" id="wCur">${CURRENCIES.map(([c, sym]) => `<option value="${c}" ${s.currency === c ? 'selected' : ''}>${c} (${sym})</option>`).join('')}</select></label>
@@ -1306,6 +1342,7 @@ function bindWelcome() {
     if (state.accounts[1]) state.accounts[1].initial = round2(parseFloat($('#wBank').value) || 0);
     save(); render();
   };
+  const signIn = $('#wSignIn'); if (signIn) signIn.onclick = () => accountForm('signin');
   $('#wName').focus();
 }
 function logo(size = 30) {
@@ -1392,7 +1429,9 @@ function bindSettings(root) {
     if (hasApi()) { try { apply(await window.pywebview.api.open_backup()); } catch (e) { toast('Could not read that file'); } }
     else { const i = document.createElement('input'); i.type = 'file'; i.accept = '.json'; i.onchange = async () => { try { apply(JSON.parse(await i.files[0].text())); } catch { toast('Could not read that file'); } }; i.click(); }
   };
-  $('#reset', root).onclick = () => confirmBox('Erase all data?', 'Every transaction, budget, goal and setting will be deleted from this device. Save a backup first if you might want it back.', 'Erase everything', () => { state = defaultState(); save(); ui.view = 'dashboard'; render(); });
+  $('#reset', root).onclick = () => confirmBox('Erase all data?', cloud()?.info().signedIn
+    ? 'Every transaction, budget, goal and setting will be deleted from this device <b>and from your account, so also from your other devices</b>. Save a backup first if you might want it back.'
+    : 'Every transaction, budget, goal and setting will be deleted from this device. Save a backup first if you might want it back.', 'Erase everything', () => { state = defaultState(); save(); ui.view = 'dashboard'; render(); });
   if (hasApi()) window.pywebview.api.data_location().then((p) => { const el = $('#dataLoc'); if (el) el.textContent = 'Saved automatically to ' + p; });
   else $('#dataLoc', root).textContent = isNativeApp() ? 'Saved automatically on this phone.' : 'Saved automatically in this browser.';
   bindCloud(root);
@@ -1527,6 +1566,15 @@ async function boot() {
   // Sync is optional: if anything in it fails, the app carries on without it.
   try {
     cloud()?.onChange(() => { if (!$('#overlay')) render(); }); // the home page button and Settings show the account
+    cloud()?.attach({
+      getState: () => state,
+      // Changes from another device (or the first download): keep them and show them.
+      setState: (s) => { state = s; save(); if ($('#overlay')) ui.renderLater = true; else render(); },
+      merge: (mine, theirs) => mergeStates(mine, migrate(JSON.parse(JSON.stringify(theirs)))).state,
+      migrate,
+      confirmMerge,
+      isOnline: () => navigator.onLine !== false,
+    });
     cloud()?.start();
   } catch (e) { console.error('Sync could not start', e); }
   // Re-render at midnight so "today" stays correct if the app is left open.
@@ -1541,7 +1589,7 @@ if (window.__LEDGER_TEST__) {
     defaultState, migrate, mergeStates, restoreBox, mergeSummary, render, money, esc, addDays, addMonths, daysBetween, weekStartOf, toISO, parseISO,
     weekInfo, accountBalance, totalBalance, postDueRecurring, nextOccurrence, budgetStatus, filteredTx,
     periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner,
-    cloudPanel, accountForm, backupDue, saveBackup, snoozeBackup, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
+    cloudPanel, accountForm, confirmMerge, syncLine, backupDue, saveBackup, snoozeBackup, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
   };
 } else {
   let booted = false;

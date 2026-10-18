@@ -5,7 +5,8 @@
  *   - Every Firebase call is wrapped: if it fails (no internet, blocked, a bug), the app keeps working.
  *   - app.js only talks to window.PocketCloud. If this file is missing, the Sync section simply isn't shown.
  *
- * Phase 2: accounts only. Phase 3 adds the data sync itself (using sync-core.js).
+ * The syncing itself (what changed, what to send, what to take from the cloud) is in sync-core.js.
+ * This file connects it to Firebase and keeps its notes in localStorage between runs.
  */
 (function () {
   const FLAG = 'pocket-ledger-cloud'; // in localStorage: "1" once someone signed in on this device
@@ -16,6 +17,30 @@
   let user = null;      // the signed-in Firebase user, or null
   let status = 'off';   // 'off' (never loaded) | 'loading' | 'ready' | 'error'
   const listeners = new Set();
+
+  // Data sync
+  let hooks = null;     // how to read and change the app's data, given by app.js through attach()
+  let engine = null;    // the running sync (PocketSync.createEngine), while signed in
+  let firestore = null; // { F, db } once loaded
+  let retryStart = null;
+  let sync = { state: 'off', lastSynced: 0, error: null }; // shown in Settings
+  const Core = window.PocketSync;
+  const local = {
+    get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
+    set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { console.warn('localStorage is full or blocked', e); } },
+    del: (k) => { try { localStorage.removeItem(k); } catch { /* blocked */ } },
+  };
+  // A random name for this device, so each change in the cloud says which device made it.
+  const deviceId = local.get('pocket-ledger-device') || (() => {
+    const id = Math.random().toString(36).slice(2, 10) + Date.now().toString(36); local.set('pocket-ledger-device', id); return id;
+  })();
+  // What was last synced, per account: { snapshot, since }. Lets each start send and read only what's new.
+  const store = {
+    load: (uid) => { try { return JSON.parse(local.get('pocket-ledger-sync:' + uid) || 'null'); } catch { return null; } },
+    save: (uid, meta) => local.set('pocket-ledger-sync:' + uid, JSON.stringify(meta)),
+    lastUid: () => local.get('pocket-ledger-sync-last'),
+    setLastUid: (uid) => local.set('pocket-ledger-sync-last', uid),
+  };
 
   const flag = {
     get: () => { try { return localStorage.getItem(FLAG) === '1'; } catch { return false; } },
@@ -36,7 +61,10 @@
         const auth = A.initializeAuth(app, { persistence: [A.indexedDBLocalPersistence, A.browserLocalPersistence] });
         await auth.authStateReady();
         user = auth.currentUser;
-        A.onAuthStateChanged(auth, (u) => { user = u; flag.set(!!u); emit(); });
+        A.onAuthStateChanged(auth, (u) => {
+          user = u; flag.set(!!u); emit();
+          if (u) startSync(); else stopSync();
+        });
         fb = { app, auth, A };
         status = 'ready'; emit();
         return fb;
@@ -44,6 +72,44 @@
       .catch((e) => { console.error('Could not load Firebase', e); status = 'error'; loading = null; emit(); throw e; });
     return loading;
   }
+
+  /* ----- data sync ----- */
+  async function loadFirestore() {
+    if (firestore) return firestore;
+    const { app } = await load();
+    const F = await import(new URL('vendor/firebase/', document.baseURI).href + 'firebase-firestore.js');
+    firestore = { F, db: F.initializeFirestore(app, { ignoreUndefinedProperties: true }) };
+    return firestore;
+  }
+  const setSync = (next) => { sync = { ...sync, ...next }; emit(); };
+  async function startSync() {
+    if (!user || !hooks || !Core || (engine && engine.uid === user.uid)) return;
+    stopSync();
+    const u = user;
+    clearTimeout(retryStart);
+    try {
+      setSync({ state: 'starting', error: null });
+      const { F, db } = await loadFirestore();
+      if (user !== u) return; // signed out meanwhile
+      const e = Core.createEngine({ api: Core.makeFirestoreAdapter(F, db, u.uid, deviceId), hooks, store, uid: u.uid, onStatus: setSync });
+      engine = Object.assign(e, { uid: u.uid });
+      await e.start();
+    } catch (err) {
+      if (err && err.code === 'sync/cancelled') { stopSync(); await signOut().catch(() => {}); return; }
+      console.error('Sync could not start', err);
+      stopSync();
+      setSync({ state: navigator.onLine === false ? 'offline' : 'error', error: err });
+      retryStart = setTimeout(startSync, 30000); // try again in a while
+    }
+  }
+  function stopSync() {
+    clearTimeout(retryStart);
+    if (engine) { try { engine.stop(); } catch (e) { console.error(e); } }
+    engine = null;
+    if (sync.state !== 'off') setSync({ state: 'off', error: null });
+  }
+  // Back online: send what's waiting (or start, if starting failed while offline).
+  window.addEventListener('online', () => { if (engine) engine.push(); else if (user && hooks) startSync(); });
 
   /* Firebase error codes -> short, friendly sentences. */
   const MESSAGES = {
@@ -96,6 +162,7 @@
   }
   async function signOut() {
     const { auth, A } = await load();
+    stopSync(); // stop listening before the sign-in goes away
     await A.signOut(auth);
   }
   /* Deleting an account needs a fresh sign-in, so we ask for the password again first. */
@@ -103,13 +170,23 @@
     const { auth, A } = await load();
     const u = auth.currentUser; if (!u) return;
     await A.reauthenticateWithCredential(u, A.EmailAuthProvider.credential(u.email, password));
+    // Delete everything stored in the cloud for this account first, then the account itself.
+    stopSync();
+    const { F, db } = await loadFirestore();
+    await Core.makeFirestoreAdapter(F, db, u.uid, deviceId).deleteAll();
+    local.del('pocket-ledger-sync:' + u.uid);
+    if (store.lastUid() === u.uid) local.del('pocket-ledger-sync-last');
     await A.deleteUser(u);
   }
 
   window.PocketCloud = {
     available: !!config,
     /* What the Settings page shows. */
-    info: () => ({ status, signedIn: !!user, email: user ? user.email : '', verified: !!(user && user.emailVerified) }),
+    info: () => ({ status, signedIn: !!user, email: user ? user.email : '', verified: !!(user && user.emailVerified), sync: { ...sync } }),
+    /* app.js gives the sync engine access to its data. Syncing starts once someone is signed in. */
+    attach: (h) => { hooks = h; if (user) startSync(); },
+    /* app.js calls this after every save; the engine sends the change a moment later. */
+    changed: () => { if (engine) engine.changed(); },
     onChange: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
     /* Called once when the app starts: only loads Firebase if someone signed in here before. */
     start: () => { if (config && flag.get()) load().catch(() => {}); },

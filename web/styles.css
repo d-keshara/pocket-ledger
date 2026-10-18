@@ -151,6 +151,13 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
 .head-tools { display: flex; gap: 8px; align-items: center; }
 .cloud-btn { border-radius: 999px; }
 .cloud-btn.on svg { color: var(--good); }
+.cloud-btn.on.warn svg { color: var(--warn); }
+.sync-line { font-size: 13px; color: var(--ink-2); }
+.have-account { display: flex; gap: 10px; align-items: center; font-size: 13px; color: var(--ink-2); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: -4px 0 18px; }
+.have-account > svg { width: 18px; height: 18px; flex: none; color: var(--accent); }
+.sync-line.ok { color: var(--good); }
+.sync-line.bad { color: var(--danger); }
 
 .seg { display: inline-flex; background: var(--surface-2); border-radius: 9px; padding: 3px; gap: 2px; }
 .seg button { border: 0; background: none; padding: 6px 14px; border-radius: 7px; cursor: pointer; color: var(--ink-2); }

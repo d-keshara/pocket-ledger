@@ -704,7 +704,7 @@ function fakeCloud(w, { signedIn = false, verified = true, fail = null } = {}) {
   const c = {
     available: true, signedIn, verified, email: signedIn ? 'me@example.com' : '',
     info: () => ({ status: 'ready', signedIn: c.signedIn, email: c.email, verified: c.verified }),
-    onChange: () => () => {}, start: () => {},
+    onChange: () => () => {}, start: () => {}, attach: () => {}, changed: () => {},
     signUp: async (email, password) => { calls.push(['signUp', email, password]); if (fail) throw { code: fail }; Object.assign(c, { signedIn: true, email, verified: false }); },
     signIn: async (method, o) => { calls.push(['signIn', method, o.email, o.password]); if (fail) throw { code: fail }; Object.assign(c, { signedIn: true, email: o.email }); },
     signOut: async () => { calls.push(['signOut']); c.signedIn = false; },
@@ -882,5 +882,46 @@ describe('sync & account', () => {
     doc.querySelector('#dgo').click(); await tick();
     assert.deepEqual(calls[0], ['delete', 'wrong123']);
     assert.equal(errText(doc, 'dp'), 'Wrong password.');
+  });
+});
+
+describe('sync screens', () => {
+  test('the welcome screen offers "Sign in" for people who already use the app elsewhere', (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    fakeCloud(w);
+    L.state.settings.onboarded = false; L.render();
+    doc.querySelector('#wSignIn').click();
+    assert.match(doc.querySelector('#overlay h2').textContent, /Sign in/);
+  });
+
+  test('Settings shows how syncing is going', (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    const { c } = fakeCloud(w, { signedIn: true });
+    c.info = () => ({ status: 'ready', signedIn: true, email: 'me@example.com', verified: true, sync: { state: 'offline' } });
+    L.ui.view = 'settings'; L.render();
+    assert.match(doc.body.textContent, /Waiting for internet/);
+    c.info = () => ({ status: 'ready', signedIn: true, email: 'me@example.com', verified: true, sync: { state: 'error', error: { code: 'permission-denied' } } });
+    L.render();
+    assert.match(doc.querySelector('.sync-line.bad').textContent, /permission-denied/);
+  });
+
+  test('"Erase all data" warns that it also erases the account when signed in', (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    fakeCloud(w, { signedIn: true });
+    L.ui.view = 'settings'; L.render();
+    doc.querySelector('#reset').click();
+    assert.match(doc.querySelector('#overlay').textContent, /also from your other devices/);
+  });
+
+  test('asking to add another account’s data: yes, no, and closing the box (= no)', async (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    fakeCloud(w, { signedIn: true });
+    let p = L.confirmMerge(); doc.querySelector('#mYes').click();
+    assert.equal(await p, true);
+    p = L.confirmMerge(); doc.querySelector('#mNo').click();
+    assert.equal(await p, false);
+    p = L.confirmMerge(); doc.querySelector('[data-close]').click();
+    assert.equal(await p, false);
+    assert.equal(doc.querySelector('#overlay'), null);
   });
 });
