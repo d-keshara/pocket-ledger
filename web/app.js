@@ -1006,15 +1006,22 @@ function accForm(a = {}) {
   openModal({
     title: a.id ? 'Edit account' : 'New account',
     body: `<div class="stack"><label class="field"><span>Name</span><input class="input" id="an" value="${esc(a.name || '')}" placeholder="e.g. Cash, Savings, Credit card, eZ Cash" autofocus maxlength="40"></label>
-      <label class="field"><span>Starting balance (${esc(state.settings.symbol)})</span><input class="input" id="ai" type="number" value="${a.initial ?? 0}"></label>
+      <label class="field"><span>Current balance (${esc(state.settings.symbol)})</span><input class="input" id="ai" type="number" value="${a.id ? accountBalance(a) : 0}"></label>
       <p class="hint">Enter what’s in the account right now. For a credit card you owe money on, use a negative number.</p>
       <div class="field"><span>Colour</span>${swatches(a.color || PALETTE[state.accounts.length % PALETTE.length])}</div></div>`,
     foot: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="as">Save account</button>',
     onMount: (m) => { const color = bindSwatches(m); $('#as', m).onclick = () => {
       const name = $('#an', m).value.trim(); if (!name) return toast('Give the account a name');
-      const rec = { name, initial: round2(parseFloat($('#ai', m).value) || 0), color: color() };
-      if (a.id) Object.assign(state.accounts.find((x) => x.id === a.id), rec); else state.accounts.push({ id: uid(), ...rec });
-      save(); closeModal(); render(); toast('Account saved');
+      const typed = round2(parseFloat($('#ai', m).value) || 0);
+      /* The box shows the current balance, so work back to the starting balance that gives it, keeping past transactions. */
+      const initial = a.id ? round2(typed - (accountBalance(a) - (+a.initial || 0))) : typed;
+      const rec = { name, initial, color: color() };
+      if (!a.id) { state.accounts.push({ id: uid(), ...rec }); save(); closeModal(); render(); return toast('Account saved'); }
+      const acc = state.accounts.find((x) => x.id === a.id);
+      const before = { name: acc.name, initial: acc.initial, color: acc.color };
+      Object.assign(acc, rec);
+      save(); closeModal(); render();
+      toast('Account saved', { label: 'Undo', run: () => { const x = state.accounts.find((y) => y.id === a.id); if (x) { Object.assign(x, before); save(); render(); } } });
     }; },
   });
 }
@@ -1107,7 +1114,7 @@ function cloudPanel() {
       ${i.verified ? '' : `<div class="verify"><p style="margin:0">We sent a link to <b>${esc(i.email)}</b>. Open it to confirm this email is yours (check spam too).</p>
         ${row('<button class="btn small" id="cloudCheck">I’ve confirmed it</button><button class="btn small ghost" id="cloudResend">Send the link again</button>')}</div>`}
       ${syncLine(i.sync)}
-      ${row(`<button class="btn" id="cloudOut">Sign out</button><button class="btn danger" id="cloudDel">${icon('trash')}Delete account</button>`)}`;
+      ${row(`<button class="btn" id="cloudOut">Sign out</button><button class="btn" id="cloudOutWipe">Sign out and remove data from this device</button><button class="btn danger" id="cloudDel">${icon('trash')}Delete account</button>`)}`;
   } else if (i.status === 'loading') {
     body = '<p class="hint" style="margin:0">Starting…</p>';
   } else {
@@ -1154,8 +1161,8 @@ function confirmMerge() {
     let answered = false; const answer = (yes) => { if (!answered) { answered = true; resolve(yes); } };
     openModal({
       title: 'Add this device’s data to the account?',
-      body: `<p style="margin:0">This device has money history from a different account. Do you want to add it to <b>${esc(cloud()?.info().email || 'this account')}</b>?</p>
-        <p class="hint" style="margin-top:10px">If you say no, you’ll be signed out and nothing is changed.</p>`,
+      body: `<p style="margin:0">This device has money history that isn’t in this account yet. It was added while signed out, or with a different account. Do you want to add it to <b>${esc(cloud()?.info().email || 'this account')}</b>?</p>
+        <p class="hint" style="margin-top:10px">If you say no, you’ll be signed out and nothing is changed. To get only your account’s data on this device, erase this device’s data first (Settings → Erase all data), then sign in.</p>`,
       foot: '<button class="btn" id="mNo">No, sign out</button><button class="btn primary" id="mYes">Yes, add it</button>',
       onClose: () => answer(false),
       onMount: (m) => { $('#mNo', m).onclick = () => { answer(false); closeModal(); }; $('#mYes', m).onclick = () => { answer(true); closeModal(); }; },
@@ -1167,8 +1174,29 @@ function bindCloud(root) {
   const on = (id, fn) => { const b = $('#' + id, root); if (b) b.onclick = fn; };
   on('cloudUp', () => accountForm('signup'));
   on('cloudIn', () => accountForm('signin'));
+  // Only offer to remove the data here once it's all in the account, so nothing can be lost.
+  const allSynced = () => c.info().sync?.state === 'synced';
+  const eraseDevice = () => { state = defaultState(); save(); ui.view = 'dashboard'; render(); };
   on('cloudOut', async () => {
-    try { await c.signOut(); render(); toast('Signed out. Your data is still on this device.'); } catch (e) { toast(c.friendlyError(e)); }
+    const synced = allSynced(); const email = c.info().email;
+    try { await c.signOut(); } catch (e) { return toast(c.friendlyError(e)); }
+    render();
+    openModal({
+      title: 'Signed out',
+      body: `<p style="margin:0">Your money history is still on this device, so you can keep using the app without an account.</p>
+        <p class="hint" style="margin-top:10px">${synced
+          ? `Want a fresh start instead? You can remove the data from this device. It stays safe in <b>${esc(email)}</b> and comes back when you sign in again.`
+          : 'Some recent changes hadn’t reached your account yet, so they are kept on this device. To start fresh later, use Settings → Erase all data.'}</p>`,
+      foot: `${synced ? `<button class="btn" id="soWipe">${icon('trash')}Remove from this device</button>` : ''}<button class="btn primary" data-close>Keep my data</button>`,
+      onMount: (m) => { const b = $('#soWipe', m); if (b) b.onclick = () => { closeModal(); eraseDevice(); toast('Data removed from this device. It’s still in your account.'); }; },
+    });
+  });
+  on('cloudOutWipe', () => {
+    if (!allSynced()) return toast('Some changes haven’t reached your account yet. Connect to the internet and wait for “Synced”, then try again.');
+    confirmBox('Sign out and remove data?', `Your money history will be removed from this device. It stays safe in <b>${esc(c.info().email)}</b> and comes back when you sign in again.`, 'Sign out and remove', async () => {
+      try { await c.signOut(); } catch (e) { return toast(c.friendlyError(e)); }
+      eraseDevice(); toast('Signed out. Data removed from this device.');
+    });
   });
   on('cloudDel', deleteAccountBox);
   on('cloudResend', async () => {

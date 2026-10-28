@@ -703,7 +703,8 @@ function fakeCloud(w, { signedIn = false, verified = true, fail = null } = {}) {
   const calls = [];
   const c = {
     available: true, signedIn, verified, email: signedIn ? 'me@example.com' : '',
-    info: () => ({ status: 'ready', signedIn: c.signedIn, email: c.email, verified: c.verified }),
+    synced: true,
+    info: () => ({ status: 'ready', signedIn: c.signedIn, email: c.email, verified: c.verified, sync: { state: c.synced ? 'synced' : 'offline' } }),
     onChange: () => () => {}, start: () => {}, attach: () => {}, changed: () => {},
     signUp: async (email, password) => { calls.push(['signUp', email, password]); if (fail) throw { code: fail }; Object.assign(c, { signedIn: true, email, verified: false }); },
     signIn: async (method, o) => { calls.push(['signIn', method, o.email, o.password]); if (fail) throw { code: fail }; Object.assign(c, { signedIn: true, email: o.email }); },
@@ -868,6 +869,51 @@ describe('sync & account', () => {
     assert.deepEqual(calls[0], ['signOut']);
     assert.equal(S.transactions.length, 1);
     assert.ok(doc.querySelector('#cloudUp'), 'shows the sign-in buttons again');
+    assert.match(doc.querySelector('.modal').textContent, /still on this device/);
+    doc.querySelector('.modal [data-close]').click();
+    assert.equal(S.transactions.length, 1, '“Keep my data” keeps it');
+  });
+
+  test('after signing out, the popup can remove the data from this device', async (t) => {
+    const { L, w, doc, add, close } = makeApp(); t.after(close);
+    fakeCloud(w, { signedIn: true });
+    add({ type: 'expense', amount: 100, date: '2026-10-07' });
+    L.ui.view = 'settings'; L.render();
+    doc.querySelector('#cloudOut').click(); await tick();
+    doc.querySelector('#soWipe').click();
+    assert.equal(L.state.transactions.length, 0);
+  });
+
+  test('the popup does not offer removing data that has not synced yet', async (t) => {
+    const { L, w, doc, add, close } = makeApp(); t.after(close);
+    const { c } = fakeCloud(w, { signedIn: true }); c.synced = false;
+    add({ type: 'expense', amount: 100, date: '2026-10-07' });
+    L.ui.view = 'settings'; L.render();
+    doc.querySelector('#cloudOut').click(); await tick();
+    assert.equal(doc.querySelector('#soWipe'), null);
+    assert.equal(L.state.transactions.length, 1);
+  });
+
+  test('“Sign out and remove data” asks first, then signs out and empties this device', async (t) => {
+    const { L, w, doc, add, close } = makeApp(); t.after(close);
+    const { calls } = fakeCloud(w, { signedIn: true });
+    add({ type: 'expense', amount: 100, date: '2026-10-07' });
+    L.ui.view = 'settings'; L.render();
+    doc.querySelector('#cloudOutWipe').click();
+    assert.equal(calls.length, 0, 'nothing happens before confirming');
+    doc.querySelector('#okb').click(); await tick();
+    assert.deepEqual(calls[0], ['signOut']);
+    assert.equal(L.state.transactions.length, 0);
+  });
+
+  test('“Sign out and remove data” is refused while changes are still waiting to sync', async (t) => {
+    const { L, w, doc, add, close } = makeApp(); t.after(close);
+    const { c, calls } = fakeCloud(w, { signedIn: true }); c.synced = false;
+    add({ type: 'expense', amount: 100, date: '2026-10-07' });
+    L.ui.view = 'settings'; L.render();
+    doc.querySelector('#cloudOutWipe').click(); await tick();
+    assert.equal(calls.length, 0);
+    assert.equal(L.state.transactions.length, 1);
   });
 
   test('deleting the account asks for the password first, and a wrong one is marked red', async (t) => {

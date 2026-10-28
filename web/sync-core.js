@@ -159,13 +159,25 @@
     return s;
   }
 
+  /* Signing out on purpose: forget what was last synced for this account on this device.
+   * Without this, signing in again later would send everything done while signed out as if it were
+   * normal offline changes, including deletions (even "Erase all data" would empty the account).
+   * Now the next sign-in starts like a first sync: the account's data comes down, nothing in it is deleted,
+   * and data made on this device while signed out is only added if the person says yes.
+   * `store` needs clear(uid) as well as setLastUid(uid). */
+  const SIGNED_OUT = 'signed-out';
+  function forgetSync(store, uid) {
+    if (uid) store.clear(uid);
+    store.setLastUid(SIGNED_OUT);
+  }
+
   /* ================= the sync engine =================
    * Knows nothing about Firebase: it talks to the cloud through `api` (see makeFirestoreAdapter below),
    * and to the app through `hooks`: getState(), setState(state), merge(mine, theirs), migrate(state),
    * confirmMerge() -> Promise<boolean>, isOnline().
    * `api.listen` calls onReady once it has sent what was already in the cloud; only then does this
    * device send its own changes, so it hears about other devices' edits and deletions first.
-   * `store` keeps the snapshot between runs: load(uid), save(uid, meta), lastUid(), setLastUid(uid). */
+   * `store` keeps the snapshot between runs: load(uid), save(uid, meta), clear(uid), lastUid(), setLastUid(uid). */
   const OVERLAP_MS = 2 * 60 * 1000; // ask again for changes from just before the last one seen, in case of clock edges
   const BATCH = 400;                // Firestore allows 500 writes in one batch
 
@@ -200,8 +212,8 @@
       set('syncing');
       const remote = await api.fetchAll();
       if (!running) return false;
-      // This device has data from a different account? Only add it to this one if the person says so,
-      // also when this account is still empty (a new account on a shared device).
+      // This device has data from a different account, or made while signed out? Only add it to this one
+      // if the person says so, also when this account is still empty (a new account on a shared device).
       const local = hooks.getState();
       const hasLocalData = ['transactions', 'goals', 'budgets', 'recurring'].some((l) => (local[l] || []).length);
       const last = store.lastUid();
@@ -382,6 +394,6 @@
 
   root.PocketSync = {
     LISTS, LOCAL_SETTINGS, SETTINGS_KEY, stable, hash, snapshotOf, diffState,
-    strip, applyRemote, commitSnapshot, chunkDiff, remoteToState, createEngine, makeFirestoreAdapter,
+    strip, applyRemote, commitSnapshot, chunkDiff, remoteToState, createEngine, makeFirestoreAdapter, forgetSync, SIGNED_OUT,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -10,7 +10,7 @@ import { JSDOM } from 'jsdom';
 // Load sync-core.js into a small sandbox and take PocketSync out of it.
 const SRC = fs.readFileSync(new URL('../web/sync-core.js', import.meta.url), 'utf8');
 const box = { setTimeout, clearTimeout, console, Date }; vm.runInNewContext(SRC, box);
-const { stable, snapshotOf, diffState, applyRemote, commitSnapshot, chunkDiff, createEngine } = box.PocketSync;
+const { stable, snapshotOf, diffState, applyRemote, commitSnapshot, chunkDiff, createEngine, forgetSync } = box.PocketSync;
 // Objects from the sandbox have their own "Object", so copy them before deepEqual.
 const plain = (v) => JSON.parse(JSON.stringify(v));
 
@@ -249,6 +249,7 @@ function device(cloud, { uid = 'u1', store = new Map(), confirm = true, now, ask
   const keep = {
     load: (u) => (store.has('meta:' + u) ? JSON.parse(store.get('meta:' + u)) : null),
     save: (u, m) => store.set('meta:' + u, JSON.stringify(m)),
+    clear: (u) => store.delete('meta:' + u),
     lastUid: () => store.get('last') || null,
     setLastUid: (u) => store.set('last', u),
   };
@@ -259,7 +260,8 @@ function device(cloud, { uid = 'u1', store = new Map(), confirm = true, now, ask
     startSignIn(asUid = uid) { engine = createEngine({ api: cloud.adapter(asUid), hooks, store: keep, uid: asUid, debounceMs: 3, retryMs: 20, overlapMs: 0 }); return engine.start(); },
     get engine() { return engine; },
     edit(fn) { fn(L.state); engine.changed(); },
-    signOut() { engine.stop(); },
+    signOut() { engine.stop(); }, // sync stopped (app closed, offline): the snapshot is kept
+    signOutForGood(asUid = uid) { engine.stop(); forgetSync(keep, asUid); }, // the Sign out button
     close() { engine?.stop(); close(); },
   };
   return d;
@@ -368,7 +370,7 @@ describe('sync: two devices, one account', () => {
     assert.equal(b.S.settings.theme, 'system');
   });
 
-  test('changes made on this device while signed out are sent after signing in again', async (t) => {
+  test('changes made while sync was stopped are sent when it starts again', async (t) => {
     const cloud = pretendCloud();
     const a = device(cloud); const b = device(cloud); t.after(() => { a.close(); b.close(); });
     await a.signIn(); await b.signIn();
@@ -376,6 +378,34 @@ describe('sync: two devices, one account', () => {
     a.S.transactions.push(tx('t5', 5));
     await a.signIn();
     assert.deepEqual(ids(b.S.transactions), ['t5']);
+  });
+
+  test('after signing out, erasing this device and signing in again deletes nothing in the account', async (t) => {
+    const cloud = pretendCloud(); const store = new Map();
+    const a = device(cloud, { store }); const b = device(cloud); t.after(() => { a.close(); b.close(); });
+    a.S.transactions.push(tx('t1', 1), tx('t2', 2));
+    await a.signIn(); await b.signIn();
+    a.signOutForGood();
+    a.L.state = a.L.defaultState(); // Settings → Erase all data, while signed out
+    await a.signIn();
+    assert.deepEqual(ids(a.S.transactions), ['t1', 't2'], 'the account data came back');
+    assert.deepEqual(ids(b.S.transactions), ['t1', 't2'], 'nothing was deleted on the other device');
+    assert.equal(cloud.count('u1', 'transactions'), 2);
+  });
+
+  test('after signing out, new data on this device is only added to the account if the person agrees', async (t) => {
+    const cloud = pretendCloud(); const store = new Map();
+    const a = device(cloud, { store, confirm: false }); t.after(() => a.close());
+    a.S.transactions.push(tx('t1', 1));
+    await a.signIn(); a.signOutForGood();
+    a.S.transactions.push(tx('guest', 50)); // someone else used the app while signed out
+    await assert.rejects(() => a.signIn(), (e) => e.code === 'sync/cancelled');
+    assert.ok(!cloud.docs.has('u1/transactions/guest'), 'not sent without asking');
+
+    const again = device(cloud, { store, confirm: true }); t.after(() => again.close());
+    again.L.state = a.S;
+    await again.signIn();
+    assert.ok(cloud.docs.has('u1/transactions/guest'), 'sent once the person said yes');
   });
 
   test("another account's data on this device is only added if the person agrees", async (t) => {
