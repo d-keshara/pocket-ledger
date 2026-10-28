@@ -437,6 +437,44 @@ describe('rendering', () => {
     assert.match(doc.querySelector('.welcome-credit').textContent, /D\. Kezara/);
   });
 
+  test('the welcome form fills in the starting balances on a new device', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    S.settings.onboarded = false; L.render();
+    doc.querySelector('#wName').value = 'Kezara'; doc.querySelector('#wCash').value = '1500'; doc.querySelector('#wBank').value = '5000';
+    doc.querySelector('#wGo').click();
+    assert.equal(L.state.accounts[0].initial, 1500);
+    assert.equal(L.state.accounts[1].initial, 5000);
+    assert.equal(L.state.settings.name, 'Kezara');
+  });
+
+  test('signing in from the welcome screen: Get started never overwrites the synced accounts', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    S.settings.onboarded = false; L.render();
+    // the account's real data arrives from the cloud while the welcome screen is still open
+    const synced = L.defaultState();
+    Object.assign(synced.settings, { onboarded: true, name: 'Banda', weeklyBudget: 4000 });
+    synced.accounts[1].initial = 9656.95;
+    L.state = synced;
+    doc.querySelector('#wName').value = 'Someone'; doc.querySelector('#wBank').value = '5000'; doc.querySelector('#wLimit').value = '';
+    doc.querySelector('#wGo').click();
+    assert.equal(L.state.accounts[1].initial, 9656.95, 'the bank balance is kept');
+    assert.equal(L.state.settings.name, 'Banda');
+    assert.equal(L.state.settings.weeklyBudget, 4000);
+    assert.ok(!doc.querySelector('#wGo'), 'the app opens');
+  });
+
+  test('the colour theme picker in Settings changes the app colours and remembers the choice', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    L.ui.view = 'settings'; L.render();
+    assert.equal(doc.querySelector('[data-pal="forest"]').getAttribute('aria-checked'), 'true', 'Forest is the default');
+    doc.querySelector('[data-pal="navy"]').click();
+    assert.equal(S.settings.palette, 'navy');
+    assert.equal(doc.documentElement.getAttribute('data-palette'), 'navy');
+    assert.equal(doc.querySelector('[data-pal="navy"]').getAttribute('aria-checked'), 'true');
+    doc.querySelector('[data-pal="forest"]').click();
+    assert.equal(doc.documentElement.hasAttribute('data-palette'), false, 'Forest uses the original colours');
+  });
+
   test('settings shows the About section with version and credit', (t) => {
     const { L, doc, close } = makeApp(); t.after(close);
     L.ui.view = 'settings'; L.render();
