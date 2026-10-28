@@ -1070,3 +1070,110 @@ describe('weekly limit box', () => {
     assert.equal(doc.querySelector('#overlay'), null);
   });
 });
+
+/* ------------------------------------------------------ calculator */
+describe('calculator', () => {
+  test('works out sums, with percentages like a shop calculator', (t) => {
+    const { L, close } = makeApp(); t.after(close);
+    const c = L.calcEval;
+    assert.equal(c('1200+350*2'), 1900);
+    assert.equal(c('1000-10%'), 900);
+    assert.equal(c('1000+18%'), 1180);
+    assert.equal(c('200*15%'), 30);
+    assert.equal(c('(450+120)/3'), 190);
+    assert.equal(c('(450+120'), 570, 'a forgotten bracket is closed');
+    assert.equal(c('1,250 × 2'), 2500);
+    assert.equal(c('10÷4'), 2.5);
+    assert.equal(c('−50+20'), -30);
+    assert.equal(c('12+'), 12, 'a sign left at the end is ignored');
+    assert.equal(c('0.1+0.2'), 0.3);
+    for (const bad of ['', 'abc', '5/0', '1++*2', 'alert(1)', '2)']) assert.equal(c(bad), null, bad);
+  });
+
+  test('a sum typed in the amount box is saved as its answer', async (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    L.txForm({ type: 'expense' });
+    doc.querySelector('#fAmount').value = '1200+350*2';
+    doc.querySelector('#fSave').click();
+    assert.equal(S.transactions.at(-1).amount, 1900);
+  });
+
+  test('pressing Enter in the amount box also uses the answer', (t) => {
+    const { L, S, w, doc, close } = makeApp(); t.after(close);
+    L.txForm({ type: 'expense' });
+    const box = doc.querySelector('#fAmount'); box.value = '100+50';
+    box.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    assert.equal(S.transactions.at(-1).amount, 150);
+  });
+
+  test('a sum it cannot work out is marked red and nothing is saved', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    const before = S.transactions.length;
+    L.txForm({ type: 'expense' });
+    doc.querySelector('#fAmount').value = '12+*abc';
+    doc.querySelector('#fSave').click();
+    assert.equal(S.transactions.length, before);
+    assert.equal(doc.querySelector('#fAmount').getAttribute('aria-invalid'), 'true');
+  });
+
+  test('the keypad puts its answer into the amount box', (t) => {
+    const { L, doc, close } = makeApp(); t.after(close);
+    L.txForm({ type: 'expense' });
+    const box = doc.querySelector('#fAmount');
+    L.calcPad(box);
+    for (const k of ['1', '2', '0', '0', '+', '3', '5', '0', '×', '2']) doc.querySelector(`#calcPad [data-k="${k}"]`).click();
+    assert.match(doc.querySelector('#calcPad .calc-res').textContent, /1,900/);
+    doc.querySelector('#calcUse').click();
+    assert.equal(box.value, '1900');
+    assert.equal(doc.querySelector('#calcPad'), null, 'the keypad closed');
+    assert.ok(doc.querySelector('#overlay'), 'the transaction form is still open');
+  });
+
+  test('the home page calculator button opens the keypad, and its answer can become an expense', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    L.ui.view = 'dashboard'; L.render();
+    doc.querySelector('[data-calc-pad]').click();
+    for (const k of ['5', '0', '0', '+', '2', '5', '0']) doc.querySelector(`#calcPad [data-k="${k}"]`).click();
+    doc.querySelector('#calcPad [data-calc-add="expense"]').click();
+    assert.equal(doc.querySelector('#calcPad'), null);
+    assert.equal(doc.querySelector('#fAmount').value, '750');
+    doc.querySelector('#fSave').click();
+    assert.equal(S.transactions.at(-1).amount, 750);
+  });
+
+  test('the round + button opens the quick actions, and each one does its job', (t) => {
+    const { L, doc, close } = makeApp(); t.after(close);
+    L.ui.view = 'dashboard'; L.render();
+    const wrap = doc.querySelector('#fabWrap');
+    doc.querySelector('#fab').click();
+    assert.ok(wrap.classList.contains('open'));
+    doc.querySelector('[data-fab="income"]').click();
+    assert.ok(!wrap.classList.contains('open'), 'the menu closed');
+    assert.ok(doc.querySelector('#typeSeg [data-v="income"].on'), 'the income form opened');
+    doc.querySelector('[data-close]').click();
+    doc.querySelector('#fab').click(); doc.querySelector('[data-fab="calc"]').click();
+    assert.ok(doc.querySelector('#calcPad'));
+    L.render(); doc.querySelector('#fab').click(); doc.querySelector('[data-fab-close]').click();
+    assert.ok(!doc.querySelector('#fabWrap').classList.contains('open'), 'tapping outside closes it');
+  });
+
+  test('money tools give the right answers', (t) => {
+    const { L, close } = makeApp(); t.after(close);
+    const m = L.toolMath;
+    assert.deepEqual({ ...m.discount(2500, 20) }, { off: 500, pay: 2000 });
+    assert.deepEqual({ ...m.split(3000, 4, 10) }, { all: 3300, each: 825 });
+    const loan = m.loan(100000, 12, 12);
+    assert.equal(loan.monthly, 8884.88);
+    assert.equal(m.loan(1200, 0, 12).monthly, 100, 'no interest: just divided');
+    assert.deepEqual({ ...m.saving(10000, 2000, 56) }, { left: 8000, perWeek: 1000, perMonth: round(8000 / (56 / 30.4375)) });
+  });
+
+  test('the Calculator page works out a tool as you type', (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    L.ui.view = 'tools'; L.render();
+    const set = (f, v) => { const i = doc.querySelector(`[data-tool="split"][data-f="${f}"]`); i.value = v; i.dispatchEvent(new w.Event('input', { bubbles: true })); };
+    set('total', '3000'); set('people', '4');
+    assert.match(doc.querySelector('#out-split').textContent, /Each person pays.*750/);
+  });
+});
+const round = (n) => Math.round(n * 100) / 100;

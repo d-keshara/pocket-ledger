@@ -79,7 +79,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .nav button:hover { background: var(--side-hover); color: var(--side-ink-strong); }
 .nav button.on { background: var(--side-hover); color: var(--side-ink-strong); box-shadow: inset 3px 0 0 #5fd3b8; }
 /* Phone-only controls: hidden on desktop, shown by the phone layout below. */
-.nav .more-btn, .fab { display: none; }
+.nav .more-btn, .fab, .fab-item, .fab-dim { display: none; }
 .more-list button { color: var(--ink); }
 .more-list button:hover, .more-list button.on { background: var(--surface-2); color: var(--ink); box-shadow: none; }
 .side-foot { margin-top: auto; padding: 0 10px; font-size: 12px; line-height: 1.4; }
@@ -491,11 +491,32 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
     display: grid; place-items: center;
     position: fixed; right: 16px;
     bottom: calc(var(--bar-gap) + 78px);  /* sits just above the floating bar */
-    width: 58px; height: 58px; border-radius: 18px; border: 0;
+    width: 58px; height: 58px; border-radius: 50%; border: 0;
     background: var(--accent); color: var(--on-accent);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, .25); z-index: 40;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .25); z-index: 42;
   }
-  .fab svg { width: 26px; height: 26px; }
+  .fab svg { width: 26px; height: 26px; transition: transform .2s; }
+  .fab-wrap.open .fab svg { transform: rotate(45deg); }   /* + turns into × */
+
+  /* The actions that fan out of the + (positions --x/--y are worked out in app.js) */
+  .fab-dim { display: block; position: fixed; inset: 0; z-index: 41; background: rgba(8, 16, 13, .5); opacity: 0; pointer-events: none; transition: opacity .18s; }
+  .fab-wrap.open .fab-dim { opacity: 1; pointer-events: auto; }
+  .fab-item {
+    position: fixed; z-index: 42; right: 19px; bottom: calc(var(--bar-gap) + 81px);  /* centred on the + */
+    width: 52px; height: 52px; padding: 0; border: 0; background: none; color: var(--ink);
+    display: grid; place-items: center;
+    opacity: 0; pointer-events: none; transform: translate(0, 0) scale(.3);
+    transition: transform .22s cubic-bezier(.3, 1.4, .5, 1), opacity .15s;
+  }
+  .fab-wrap.open .fab-item { opacity: 1; pointer-events: auto; transform: translate(var(--x), var(--y)) scale(1); transition-delay: calc(var(--i) * 30ms); }
+  .fab-ic { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--surface); color: var(--ink); box-shadow: 0 4px 14px rgba(0, 0, 0, .3); }
+  .fab-ic svg { width: 22px; height: 22px; }
+  .fab-item.expense .fab-ic { color: var(--danger); }
+  .fab-item.income .fab-ic { color: var(--good); }
+  .fab-item:active .fab-ic { transform: scale(.94); }
+  .fab-label { position: absolute; top: 100%; margin-top: 4px; left: 50%; transform: translateX(-50%); white-space: nowrap;
+    font-size: 11.5px; font-weight: 600; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .6); }
 
   /* 4. Tighter spacing; extra bottom padding so the + never covers content */
   .page { padding: max(40px, calc(env(safe-area-inset-top) + 16px)) 16px 100px; } /* room below the status bar / notch */
@@ -561,3 +582,40 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
   .tx .row-actions { opacity: 1; }
   .shortcuts-hint { display: none; } /* keyboard shortcuts mean nothing without a keyboard */
 }
+
+/* ---------- calculator ---------- */
+.calc-wrap { position: relative; display: block; }
+.calc-wrap > .input { padding-right: 44px; }
+.calc-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border: 0; border-radius: 8px;
+  background: none; color: var(--muted); cursor: pointer; display: grid; place-items: center; }
+.calc-btn:hover, .calc-btn:focus-visible { background: var(--surface-2); color: var(--accent); }
+.calc-btn svg { width: 18px; height: 18px; }
+.calc-ov { position: fixed; inset: 0; z-index: 60; background: rgba(8, 16, 13, .45); display: grid; place-items: center; padding: 16px; animation: fade .12s; }
+.calc-pad { width: min(340px, 100%); background: var(--surface); border-radius: 18px; padding: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.3); animation: rise .16s; }
+.calc-screen { background: var(--surface-2); border-radius: 12px; padding: 12px 14px; text-align: right; margin-bottom: 12px; min-height: 76px; }
+.calc-expr { font-family: var(--num); font-size: 28px; line-height: 1.2; color: var(--ink); overflow-wrap: anywhere; }
+.calc-res { font-family: var(--num); font-size: 15px; color: var(--accent); min-height: 20px; margin-top: 4px; }
+.calc-keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.calc-keys button { height: 52px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink);
+  font-family: var(--num); font-size: 20px; cursor: pointer; touch-action: manipulation; }
+.calc-keys button:hover { background: var(--surface-2); }
+.calc-keys button:active { transform: scale(.96); }
+.calc-keys button.op { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.calc-keys button.eq { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.calc-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+.calc-foot .btn { flex: 1; justify-content: center; }
+.head p svg { width: 15px; height: 15px; vertical-align: -2px; }
+.tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.tool-fields { display: grid; gap: 12px; }
+.tool-out { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+.tool-out .btn { justify-self: start; margin-top: 4px; }
+.tool-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; color: var(--ink-2); }
+.tool-row b { font-family: var(--num); font-weight: 400; color: var(--ink); font-size: 17px; }
+.tool-row.strong b { font-size: 24px; color: var(--accent); }
+@media (max-width: 640px) {
+  .calc-ov { place-items: end center; padding: 0; }
+  .calc-pad { width: 100%; border-radius: 18px 18px 0 0; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .tools { grid-template-columns: 1fr; }
+}
+.btn.calc-open { padding-left: 11px; padding-right: 11px; }
+.btn.calc-open svg { width: 18px; height: 18px; }
