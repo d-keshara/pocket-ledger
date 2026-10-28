@@ -643,8 +643,8 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
 /* ================= Phone layout (written by you in Phase 1) ================= */
 @media (max-width: 640px) {
   /* Gap under the tab bar: sits inside the iPhone home-indicator zone (34px) but
-     12px clear of the indicator itself, like native iOS tab bars. 10px on phones without one. */
-  :root { --bar-gap: max(10px, calc(env(safe-area-inset-bottom) - 12px)); }
+     12px clear of the indicator itself, like native iOS tab bars. 16px on phones without one (Android). */
+  :root { --bar-gap: max(16px, calc(env(safe-area-inset-bottom) - 12px)); }
 
   /* 1. Two-row grid: content on top, nav bar at the bottom */
   .app { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
