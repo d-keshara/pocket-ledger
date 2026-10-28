@@ -19,7 +19,8 @@ WHAT YOU CAN DO
 • Schedule regular payments such as rent, bills and salary so they are added automatically
 • See reports: income vs. expenses by month, spending by category, your biggest expenses and your savings rate
 • Search and filter every transaction by date, type, category or account
-• Choose your currency (LKR, USD, EUR, GBP, INR, AUD and many more), your first day of the week, and light or dark mode
+• Built-in calculator: type sums like 1200+350 in any amount, or work out discounts, bill splits, loan payments and how much to save each week
+• Choose your currency (LKR, USD, EUR, GBP, INR, AUD and many more), your first day of the week, light or dark mode, and a colour theme: Forest, Onyx, Navy or Mocha
 • Optional sync: create a free account to use the same data on your phone and computer, updated live
 
 PRIVATE BY DEFAULT
@@ -58,7 +59,14 @@ Designed and developed by D. Kezara.
 - Web version: https://d-keshara.github.io/pocket-ledger/
 - Delete account (Play Console > App content > Data safety > "Delete account URL"): https://d-keshara.github.io/pocket-ledger/account.html?mode=deleteAccount
 
-## What's new in 1.7.0 (release notes, max 500)
+## What's new in 1.9.0 (release notes, max 500)
+New: colour themes. Pick Forest, Onyx (pure black), Navy or Mocha in Settings, each in light and dark.
+New: calculator. Type sums like 1200+350 in any amount box, use the keypad, or open the Calculator page for discounts, bill splits, loan payments and savings plans.
+New: tap the round + for Expense, Income, Transfer and Calculator.
+Fixed: editing an account balance now sets it exactly, with Undo.
+Fixed: safer sign out, with an option to remove data from this device.
+
+## What's new in 1.7.0, kept for reference (release notes, max 500)
 New: optional sync. Create a free account to use the same data on your phone and computer, updated live. Without an account the app works exactly as before, fully on your device.
 Also new: the home screen now shows today's income and expenses at a glance, and the week in a tidy row below the chart.
 Fixed: numbers can now be typed in the weekly limit box.
