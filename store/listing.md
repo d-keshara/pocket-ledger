@@ -59,7 +59,11 @@ Designed and developed by D. Kezara.
 - Web version: https://d-keshara.github.io/pocket-ledger/
 - Delete account (Play Console > App content > Data safety > "Delete account URL"): https://d-keshara.github.io/pocket-ledger/account.html?mode=deleteAccount
 
-## What's new in 1.9.0 (release notes, max 500)
+## What's new in 1.9.1 (release notes, max 500)
+Fixed: the strips behind the phone's status bar and navigation buttons now match your colour theme instead of showing grey.
+Fixed: more space between the bottom tab bar and the phone's navigation buttons.
+
+## What's new in 1.9.0, kept for reference (release notes, max 500)
 New: colour themes. Pick Forest, Onyx (pure black), Navy or Mocha in Settings, each in light and dark.
 New: calculator. Type sums like 1200+350 in any amount box, use the keypad, or open the Calculator page for discounts, bill splits, loan payments and savings plans.
 New: tap the round + for Expense, Income, Transfer and Calculator.
