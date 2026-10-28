@@ -510,7 +510,9 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
   }
   .fab-wrap.open .fab-item { opacity: 1; pointer-events: auto; transform: translate(var(--x), var(--y)) scale(1); transition-delay: calc(var(--i) * 30ms); }
   .fab-ic { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
-    background: var(--surface); color: var(--ink); box-shadow: 0 4px 14px rgba(0, 0, 0, .3); }
+    background: var(--raised); color: var(--ink); box-shadow: 0 4px 14px rgba(0, 0, 0, .3);
+    border: 1.5px solid var(--line);
+    border-color: color-mix(in srgb, currentColor 55%, transparent); }  /* a ring in the button's own colour */
   .fab-ic svg { width: 22px; height: 22px; }
   .fab-item.expense .fab-ic { color: var(--danger); }
   .fab-item.income .fab-ic { color: var(--good); }
