@@ -3,7 +3,7 @@
 'use strict';
 
 /* ================= constants ================= */
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.9.1';
 const AUTHOR = 'D. Kezara';
 const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948', '#5f6b66', '#0f6b5c'];
 const CURRENCIES = [
@@ -95,6 +95,8 @@ const ui = {
 
 // True inside the Android app built with Capacitor (see capacitor.config.json).
 const isNativeApp = () => !!window.Capacitor?.isNativePlatform?.();
+// Lets styles.css give Android its own spacing above the phone's navigation buttons.
+if (window.Capacitor?.getPlatform?.() === 'android') document.documentElement.classList.add('android');
 const hasApi = () => !!(window.pywebview && window.pywebview.api && window.pywebview.api.save_data);
 let saveTimer = null;
 function save() {
