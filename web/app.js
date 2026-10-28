@@ -1269,6 +1269,7 @@ function viewSettings() {
           <label class="field"><span>Week starts on</span><select class="input" id="sWeek">${[1, 0, 6].map((d) => `<option value="${d}" ${s.weekStart === d ? 'selected' : ''}>${['Sunday', 'Monday', '', '', '', '', 'Saturday'][d]}</option>`).join('')}</select></label>
           <label class="field"><span>Appearance</span><select class="input" id="sTheme">${[['system', systemLabel()], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => `<option value="${v}" ${s.theme === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         </div>
+        <div class="field"><span>Colour theme</span><div class="palettes" role="radiogroup" aria-label="Colour theme">${PALETTES.map(([v, l]) => `<button type="button" role="radio" aria-checked="${(s.palette || 'forest') === v}" class="pal pal-${v}" data-pal="${v}"><i aria-hidden="true"></i><span>${l}</span></button>`).join('')}</div></div>
         <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="sDec" ${s.decimals ? 'checked' : ''}> Show cents / decimals</label>
       </div></div>
       <div class="panel"><h2>Your data</h2><div class="stack">
@@ -1584,9 +1585,13 @@ function setTheme(t) {
   const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   if (document.startViewTransition && !reduce) document.startViewTransition(applyTheme); else applyTheme();
 }
+/* Colour themes: each has a light and a dark version (the colours are in styles.css). Forest is the original. */
+const PALETTES = [['forest', 'Forest'], ['onyx', 'Onyx'], ['navy', 'Navy'], ['mocha', 'Mocha']];
 function applyTheme() {
   const t = state?.settings.theme || 'system';
   if (t === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+  const p = state?.settings.palette;
+  if (!p || p === 'forest') document.documentElement.removeAttribute('data-palette'); else document.documentElement.setAttribute('data-palette', p);
   updateSystemBars();
 }
 /* Android app: light status-bar icons on dark screens (splash, dark theme), dark icons on light ones. */
@@ -1618,7 +1623,14 @@ function viewWelcome() {
     <p class="welcome-credit">Designed and developed by ${AUTHOR} · v${APP_VERSION}</p></div></div>`;
 }
 function bindWelcome() {
+  const shown = state; // the data this screen was opened with
   $('#wGo').onclick = () => {
+    // Signed in from this screen and the account's data arrived while it was still open: that data is
+    // the real one. Don't write this form's name, limit and starting balances over the synced accounts.
+    if (state !== shown || state.settings.onboarded) {
+      state.settings.onboarded = true; save(); render(); toast('Your data from your account is loaded');
+      return;
+    }
     const s = state.settings; const cur = $('#wCur').value;
     s.name = $('#wName').value.trim(); s.currency = cur; s.symbol = CURRENCIES.find((c) => c[0] === cur)[1];
     s.weekStart = +$('#wWeek').value; s.weeklyBudget = round2(parseFloat($('#wLimit').value) || 0); s.onboarded = true;
@@ -1731,6 +1743,7 @@ function bindSettings(root) {
   $('#sSym', root).onchange = (e) => { s.symbol = e.target.value.trim() || s.currency; save(); render(); };
   $('#sWeek', root).onchange = (e) => { s.weekStart = +e.target.value; save(); render(); };
   $('#sTheme', root).onchange = (e) => { s.theme = e.target.value; save(); render(); };
+  $$('[data-pal]', root).forEach((b) => b.onclick = () => { s.palette = b.dataset.pal; save(); render(); });
   $('#sDec', root).onchange = (e) => { s.decimals = e.target.checked; save(); render(); };
   $('#backup', root).onclick = saveBackup;
   $('#csvAll', root).onclick = () => exportCsv(state.transactions);

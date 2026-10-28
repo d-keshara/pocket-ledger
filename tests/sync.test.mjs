@@ -508,7 +508,7 @@ describe('sync: fixes from the bug review', () => {
     // turn b's notes into the old format: whole texts instead of fingerprints
     const meta = JSON.parse(store.get('meta:u1'));
     for (const k of Object.keys(meta.snapshot)) if (!k.startsWith('goals/')) meta.snapshot[k] = stable(k === 'settings/main'
-      ? Object.fromEntries(Object.entries(b.S.settings).filter(([f]) => !['lastBackup', 'backupSnoozeUntil', 'theme'].includes(f)))
+      ? Object.fromEntries(Object.entries(b.S.settings).filter(([f]) => !['lastBackup', 'backupSnoozeUntil', 'theme', 'palette'].includes(f)))
       : b.S[k.split('/')[0]].find((x) => x.id === k.slice(k.indexOf('/') + 1)));
     store.set('meta:u1', JSON.stringify(meta));
     a.edit((s) => { s.transactions[0].amount = 250; }); // changed on a while b was closed

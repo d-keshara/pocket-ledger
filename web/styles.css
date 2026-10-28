@@ -23,6 +23,7 @@
   --shadow: 0 1px 2px rgba(21, 33, 29, .06), 0 8px 24px rgba(21, 33, 29, .06);
   --raised: #ffffff;          /* the theme switch's sliding pill */
   --toast-action: #7fe0c8;    /* "Undo" on the toast (toast is dark in light mode) */
+  --side-accent: #5fd3b8;     /* the marker on the chosen page in the menu */
   --num: "Bahnschrift", "DIN Alternate", "Segoe UI", sans-serif;
   --body: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
 }
@@ -46,6 +47,198 @@
   --shadow: 0 1px 2px rgba(0,0,0,.3);
   --raised: #2d3b36; --toast-action: #0f6b5c;
 }
+
+/* ---------- colour themes (Settings → Colour theme). Forest, the original, is the colours above. ----------
+   Each theme sets every colour twice: light first, then dark. The dark rules have one more part in
+   their selector, so in dark mode they always win over the light ones. */
+:root[data-palette="onyx"] {
+  --bg: #f4f4f5;
+  --surface: #ffffff;
+  --surface-2: #ececee;
+  --ink: #18181b;
+  --ink-2: #52525b;
+  --muted: #71717a;
+  --line: #e4e4e7;
+  --accent: #1c1c1f;
+  --accent-soft: #e9e9eb;
+  --on-accent: #ffffff;
+  --side: #111113;
+  --side-ink: #c9c9cf;
+  --side-hover: #232327;
+  --side-accent: #ffffff;
+  --grid: #ececee;
+  --raised: #ffffff;
+  --toast-action: #d4d4d8;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-palette="onyx"]:not([data-theme="light"]) {
+    --bg: #09090b;
+    --surface: #131316;
+    --surface-2: #1c1c20;
+    --ink: #f4f4f5;
+    --ink-2: #a1a1aa;
+    --muted: #71717a;
+    --line: #27272a;
+    --accent: #f4f4f5;
+    --accent-soft: #26262b;
+    --on-accent: #09090b;
+    --side: #000000;
+    --side-ink: #a1a1aa;
+    --side-hover: #1c1c20;
+    --side-accent: #ffffff;
+    --grid: #1f1f23;
+    --raised: #2a2a2f;
+    --toast-action: #18181b;
+  }
+}
+:root[data-palette="onyx"][data-theme="dark"] {
+  --bg: #09090b;
+  --surface: #131316;
+  --surface-2: #1c1c20;
+  --ink: #f4f4f5;
+  --ink-2: #a1a1aa;
+  --muted: #71717a;
+  --line: #27272a;
+  --accent: #f4f4f5;
+  --accent-soft: #26262b;
+  --on-accent: #09090b;
+  --side: #000000;
+  --side-ink: #a1a1aa;
+  --side-hover: #1c1c20;
+  --side-accent: #ffffff;
+  --grid: #1f1f23;
+  --raised: #2a2a2f;
+  --toast-action: #18181b;
+}
+:root[data-palette="navy"] {
+  --bg: #f3f5f9;
+  --surface: #ffffff;
+  --surface-2: #e9eef6;
+  --ink: #121a2b;
+  --ink-2: #4a5568;
+  --muted: #718096;
+  --line: #dde3ee;
+  --accent: #24448f;
+  --accent-soft: #e1e8f7;
+  --on-accent: #ffffff;
+  --side: #0f1b33;
+  --side-ink: #c3cde0;
+  --side-hover: #1b2b4d;
+  --side-accent: #7da2ff;
+  --grid: #e4e9f2;
+  --raised: #ffffff;
+  --toast-action: #9db8ff;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-palette="navy"]:not([data-theme="light"]) {
+    --bg: #0a101c;
+    --surface: #111a2b;
+    --surface-2: #182338;
+    --ink: #e8edf7;
+    --ink-2: #a6b1c6;
+    --muted: #77839a;
+    --line: #22304a;
+    --accent: #7da2ff;
+    --accent-soft: #18284a;
+    --on-accent: #0a1430;
+    --side: #070c16;
+    --side-ink: #a6b4cf;
+    --side-hover: #15213a;
+    --side-accent: #7da2ff;
+    --grid: #1c2840;
+    --raised: #24324d;
+    --toast-action: #24448f;
+  }
+}
+:root[data-palette="navy"][data-theme="dark"] {
+  --bg: #0a101c;
+  --surface: #111a2b;
+  --surface-2: #182338;
+  --ink: #e8edf7;
+  --ink-2: #a6b1c6;
+  --muted: #77839a;
+  --line: #22304a;
+  --accent: #7da2ff;
+  --accent-soft: #18284a;
+  --on-accent: #0a1430;
+  --side: #070c16;
+  --side-ink: #a6b4cf;
+  --side-hover: #15213a;
+  --side-accent: #7da2ff;
+  --grid: #1c2840;
+  --raised: #24324d;
+  --toast-action: #24448f;
+}
+:root[data-palette="mocha"] {
+  --bg: #f6f3ee;
+  --surface: #fffdfa;
+  --surface-2: #efe9e0;
+  --ink: #1f1a14;
+  --ink-2: #5a5046;
+  --muted: #857a6e;
+  --line: #e6ded2;
+  --accent: #8a5a2b;
+  --accent-soft: #f1e6d6;
+  --on-accent: #ffffff;
+  --side: #2a1f16;
+  --side-ink: #dccdb9;
+  --side-hover: #3a2c20;
+  --side-accent: #d9a95f;
+  --grid: #ece5da;
+  --raised: #fffdfa;
+  --toast-action: #e2b878;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-palette="mocha"]:not([data-theme="light"]) {
+    --bg: #12100d;
+    --surface: #1b1814;
+    --surface-2: #24201b;
+    --ink: #f2ece4;
+    --ink-2: #b8ab9b;
+    --muted: #8a7f72;
+    --line: #2f2a23;
+    --accent: #d9a95f;
+    --accent-soft: #3a2e1e;
+    --on-accent: #1f1608;
+    --side: #0d0b09;
+    --side-ink: #c4b6a4;
+    --side-hover: #2a241d;
+    --side-accent: #d9a95f;
+    --grid: #29241e;
+    --raised: #352e26;
+    --toast-action: #8a5a2b;
+  }
+}
+:root[data-palette="mocha"][data-theme="dark"] {
+  --bg: #12100d;
+  --surface: #1b1814;
+  --surface-2: #24201b;
+  --ink: #f2ece4;
+  --ink-2: #b8ab9b;
+  --muted: #8a7f72;
+  --line: #2f2a23;
+  --accent: #d9a95f;
+  --accent-soft: #3a2e1e;
+  --on-accent: #1f1608;
+  --side: #0d0b09;
+  --side-ink: #c4b6a4;
+  --side-hover: #2a241d;
+  --side-accent: #d9a95f;
+  --grid: #29241e;
+  --raised: #352e26;
+  --toast-action: #8a5a2b;
+}
+
+/* the colour picker in Settings: a small two-tone circle per theme */
+.palettes { display: flex; gap: 8px; flex-wrap: wrap; }
+.pal { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface); color: var(--ink); cursor: pointer; font-size: 13.5px; }
+.pal i { width: 22px; height: 22px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(127, 127, 127, .35); }
+.pal[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); font-weight: 600; }
+.pal-forest i { background: linear-gradient(135deg, #12302a 50%, #5fd3b8 50%); }
+.pal-onyx i { background: linear-gradient(135deg, #09090b 50%, #f4f4f5 50%); }
+.pal-navy i { background: linear-gradient(135deg, #0f1b33 50%, #7da2ff 50%); }
+.pal-mocha i { background: linear-gradient(135deg, #2a1f16 50%, #d9a95f 50%); }
 
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; overscroll-behavior: none; touch-action: pan-x pan-y; }
@@ -77,7 +270,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .nav button svg { width: 18px; height: 18px; flex: none; opacity: .8; }
 .nav button:hover { background: var(--side-hover); color: var(--side-ink-strong); }
-.nav button.on { background: var(--side-hover); color: var(--side-ink-strong); box-shadow: inset 3px 0 0 #5fd3b8; }
+.nav button.on { background: var(--side-hover); color: var(--side-ink-strong); box-shadow: inset 3px 0 0 var(--side-accent); }
 /* Phone-only controls: hidden on desktop, shown by the phone layout below. */
 .nav .more-btn, .fab, .fab-item, .fab-dim { display: none; }
 .more-list button { color: var(--ink); }
@@ -476,7 +669,7 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
     font-size: 11px; justify-content: center;
   }
   .nav span { display: block; }         /* the 820px rule hid labels; bring them back */
-  .nav button.on { box-shadow: none; background: var(--side-hover); color: #5fd3b8; }  /* filled pill for the active tab */
+  .nav button.on { box-shadow: none; background: var(--side-hover); color: var(--side-accent); }  /* filled pill for the active tab */
   .nav .more-btn { display: flex; }     /* same specificity as the hide rule, comes later, so it wins */
   /* The "More" sheet also uses .nav, so put its items back into a normal vertical list */
   .nav.more-list { flex-direction: column; gap: 2px; }
