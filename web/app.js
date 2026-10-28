@@ -1601,6 +1601,10 @@ function updateSystemBars() {
   const t = state?.settings.theme || 'system';
   const dark = !!document.getElementById('splash') || t === 'dark' || (t === 'system' && !!darkScheme?.matches);
   window.Capacitor.Plugins.SystemBars?.setStyle({ style: dark ? 'DARK' : 'LIGHT' }).catch(() => {});
+  /* Paint the strips behind the status bar and gesture bar in the page colour (green on the splash and welcome screens) */
+  const green = !!document.getElementById('splash') || !state?.settings.onboarded;
+  const color = getComputedStyle(document.documentElement).getPropertyValue(green ? '--side' : '--bg').trim();
+  if (color) window.Capacitor.Plugins.BarColor?.setColor({ color }).catch(() => {});
 }
 darkScheme?.addEventListener?.('change', updateSystemBars);
 
