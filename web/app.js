@@ -45,6 +45,7 @@ const ICONS = {
   search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+  calc: '<rect x="5" y="2.5" width="14" height="19" rx="2"/><path d="M8.5 6.5h7M8.5 11h.01M12 11h.01M15.5 11h.01M8.5 14.5h.01M12 14.5h.01M15.5 14.5h.01M8.5 18h.01M12 18h.01M15.5 18h.01"/>',
   auto: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/>',
 };
 const icon = (n) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
@@ -89,6 +90,7 @@ const ui = {
   view: 'dashboard',
   tx: { q: '', type: 'all', cat: 'all', acc: 'all', period: 'month', from: '', to: '' },
   reportPeriod: 'month',
+  tools: {}, // what's typed on the Calculator page, so a redraw doesn't clear it
 };
 
 // True inside the Android app built with Capacitor (see capacitor.config.json).
@@ -317,7 +319,7 @@ function confirmBox(title, text, okLabel, onOk) {
   });
 }
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeModal();
+  if (e.key === 'Escape') { setFab(false); closeModal(); }
   const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName);
   if (!state?.settings.onboarded || $('#overlay')) return;
   if ((e.ctrlKey && e.key.toLowerCase() === 'n') || (!typing && e.key.toLowerCase() === 'n')) { e.preventDefault(); txForm({ type: 'expense' }); }
@@ -393,7 +395,7 @@ function txForm(existing = {}) {
   const body = () => `
     <div class="stack">
       ${lockType ? '' : `<div class="seg type" id="typeSeg">${['expense', 'income', 'transfer'].map((v) => `<button type="button" data-v="${v}" class="${v === type ? 'on' : ''}">${v[0].toUpperCase() + v.slice(1)}</button>`).join('')}</div>`}
-      <label class="field"><span>Amount (${esc(state.settings.symbol)})</span><input class="input amount" id="fAmount" type="number" min="0" step="0.01" inputmode="decimal" value="${draft.amount}" placeholder="0" autofocus></label>
+      <label class="field"><span>Amount (${esc(state.settings.symbol)})</span><input class="input amount calc" id="fAmount" type="text" inputmode="decimal" autocomplete="off" value="${draft.amount}" placeholder="0" autofocus></label>
       ${type === 'transfer' ? '' : `<div class="field"><span>Category</span><div class="chips" id="fCats">${state.categories.filter((c) => c.type === type).map((c) => `<button type="button" class="chip ${c.id === draft.categoryId ? 'on' : ''}" data-id="${c.id}"><i class="dot" style="background:${c.color}"></i>${esc(c.name)}</button>`).join('')}</div></div>`}
       <div class="grid2">
         <label class="field"><span>${lockType ? 'Account' : type === 'transfer' ? 'From account' : 'Account'}</span><select class="input" id="fAcc">${accOptions(draft.accountId)}</select></label>
@@ -521,13 +523,235 @@ function ring(pct) {
   return `<svg class="ring" viewBox="0 0 64 64"><circle class="bg" cx="32" cy="32" r="${r}"/><circle class="fg" cx="32" cy="32" r="${r}" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - p)}"/><text x="32" y="33">${Math.round(pct * 100)}%</text></svg>`;
 }
 
+/* ================= calculator ================= */
+/* Works out a sum like "1200+350*2", "1000-10%" or "(450+120)/3". No eval(): a small parser that only
+   knows numbers, + − × ÷, % and brackets. "x+10%" adds 10% of x, like a shop calculator; "15%" alone is 0.15.
+   Returns the answer rounded to cents, or null if it isn't a sum it understands. */
+function calcEval(text) {
+  let s = String(text ?? '').replace(/[,\s]/g, '').replace(/×/g, '*').replace(/÷/g, '/').replace(/[−–]/g, '-').replace(/[+\-*/]+$/, '');
+  if (!s) return null;
+  s += ')'.repeat(Math.max(0, (s.match(/\(/g) || []).length - (s.match(/\)/g) || []).length)); // close forgotten brackets
+  let i = 0;
+  const fail = () => { throw new Error('not a sum'); };
+  const num = () => { const m = /^(\d+\.?\d*|\.\d+)/.exec(s.slice(i)); if (!m) fail(); i += m[0].length; return parseFloat(m[0]); };
+  // One number or bracket. pct: it was written as a percentage ("10%").
+  const factor = () => {
+    if (s[i] === '-') { i++; const f = factor(); return { v: -f.v, pct: f.pct }; }
+    if (s[i] === '+') { i++; return factor(); }
+    let v;
+    if (s[i] === '(') { i++; v = expr(); if (s[i] !== ')') fail(); i++; } else v = num();
+    if (s[i] === '%') { i++; return { v: v / 100, pct: true }; }
+    return { v, pct: false };
+  };
+  const term = () => {
+    let { v, pct } = factor();
+    while (s[i] === '*' || s[i] === '/') {
+      const op = s[i++]; const g = factor(); pct = false;
+      if (op === '*') v *= g.v; else { if (!g.v) fail(); v /= g.v; }
+    }
+    return { v, pct };
+  };
+  function expr() {
+    let v = term().v;
+    while (s[i] === '+' || s[i] === '-') {
+      const op = s[i++]; const t = term(); const rhs = t.pct ? v * t.v : t.v;
+      v = op === '+' ? v + rhs : v - rhs;
+    }
+    return v;
+  }
+  try { const v = expr(); return i === s.length && Number.isFinite(v) ? round2(v) : null; } catch { return null; }
+}
+/* Amount boxes (class "calc") take sums: the answer replaces the sum when you leave the box, press Enter
+   or tap Save. A sum that can't be worked out is marked red and the Save button waits. */
+const PLAIN_NUMBER = /^-?(\d+\.?\d*|\.\d+)$/;
+function settleCalc(input) {
+  const v = input.value.trim();
+  if (!v || PLAIN_NUMBER.test(v)) { input.removeAttribute('aria-invalid'); return true; }
+  const r = calcEval(v);
+  if (r === null) { input.setAttribute('aria-invalid', 'true'); return false; }
+  input.value = String(r); input.removeAttribute('aria-invalid');
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  return true;
+}
+document.addEventListener('focusout', (e) => { if (e.target.matches?.('input.calc')) settleCalc(e.target); }, true);
+document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches?.('input.calc')) settleCalc(e.target); }, true);
+// Runs before any button's own click, so Save always sees the answer, never "1200+350".
+document.addEventListener('click', (e) => {
+  if (e.target.closest?.('#calcPad')) return;
+  const bad = $$('input.calc').filter((x) => !settleCalc(x));
+  const btn = e.target.closest?.('.btn.primary');
+  const box = btn?.closest('.modal, .page');
+  const mine = box && bad.find((x) => box.contains(x));
+  if (mine) { e.preventDefault(); e.stopPropagation(); toast('That amount isn’t a sum the calculator understands'); mine.focus(); }
+}, true);
+
+/* A calculator button inside every amount box opens the keypad. Added to boxes as they appear on screen. */
+function addCalcButtons(root = document) {
+  $$('input.calc:not([data-calc-ready])', root).forEach((input) => {
+    input.dataset.calcReady = '1';
+    const focused = document.activeElement === input; // moving a box loses its focus: give it back
+    const wrap = document.createElement('span'); wrap.className = 'calc-wrap';
+    input.replaceWith(wrap); wrap.appendChild(input);
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'calc-btn'; b.setAttribute('aria-label', 'Open calculator'); b.innerHTML = icon('calc');
+    b.onclick = (e) => { e.preventDefault(); calcPad(input); };
+    wrap.appendChild(b);
+    if (focused) { input.focus(); input.select?.(); }
+  });
+}
+if (typeof MutationObserver !== 'undefined') new MutationObserver(() => addCalcButtons()).observe(document.body, { childList: true, subtree: true });
+
+/* The keypad. With an amount box, "Use" puts the answer into it; on its own (Calculator page) it's just a calculator. */
+const CALC_KEYS = ['C', '⌫', '%', '÷', '7', '8', '9', '×', '4', '5', '6', '−', '1', '2', '3', '+', '00', '0', '.', '='];
+const CALC_OPS = '+−×÷';
+function calcPad(input = null) {
+  closeCalcPad();
+  const start = input ? input.value.trim() : '';
+  let expr = calcEval(start) === null ? '' : start.replace(/\*/g, '×').replace(/\//g, '÷').replace(/-/g, '−');
+  const ov = document.createElement('div'); ov.className = 'calc-ov'; ov.id = 'calcPad';
+  ov.innerHTML = `<div class="calc-pad" role="dialog" aria-modal="true" aria-label="Calculator">
+    <div class="calc-screen"><div class="calc-expr" aria-live="polite"></div><div class="calc-res"></div></div>
+    <div class="calc-keys">${CALC_KEYS.map((k) => `<button type="button" data-k="${k}" class="${CALC_OPS.includes(k) || k === '%' ? 'op' : ''} ${k === '=' ? 'eq' : ''}" aria-label="${{ '⌫': 'Delete', C: 'Clear', '−': 'Minus', '×': 'Times', '÷': 'Divide by' }[k] || k}">${k}</button>`).join('')}</div>
+    <div class="calc-foot"><button type="button" class="btn" data-calc-close>${input ? 'Cancel' : 'Close'}</button>${input ? '<button type="button" class="btn primary" id="calcUse"></button>'
+      : '<button type="button" class="btn" data-calc-add="income">+ Income</button><button type="button" class="btn primary" data-calc-add="expense">+ Expense</button>'}</div></div>`;
+  const show = () => {
+    const r = calcEval(expr);
+    $('.calc-expr', ov).textContent = expr || '0';
+    $('.calc-res', ov).textContent = r !== null && !PLAIN_NUMBER.test(expr.replace(/−/g, '-')) ? '= ' + money(r) : '';
+    const use = $('#calcUse', ov); if (use) { use.textContent = r !== null ? `Use ${money(r)}` : 'Use'; use.disabled = r === null; }
+    $$('[data-calc-add]', ov).forEach((b) => { b.disabled = !(r > 0); });
+  };
+  const press = (k) => {
+    const last = expr.slice(-1);
+    if (k === 'C') expr = '';
+    else if (k === '⌫') expr = expr.slice(0, -1);
+    else if (k === '=') { const r = calcEval(expr); if (r !== null) expr = String(r).replace('-', '−'); }
+    else if (CALC_OPS.includes(k)) {
+      if (!expr) { if (k === '−') expr = '−'; }
+      else if (CALC_OPS.includes(last)) expr = expr.slice(0, -1) + k; // changed their mind: swap the sign
+      else expr += k;
+    } else if (k === '%') { if (/[\d.]/.test(last)) expr += '%'; }
+    else if (k === '.') { const n = expr.split(/[+−×÷%]/).pop(); if (!n.includes('.')) expr += n ? '.' : '0.'; }
+    else if (last !== '%' && expr.length < 40) expr += k;
+    show();
+  };
+  const use = () => {
+    const r = calcEval(expr); if (r === null) return;
+    input.value = String(r); input.removeAttribute('aria-invalid');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    closeCalcPad();
+  };
+  // Typing works too. Keys go to the keypad only, so the app's own shortcuts (N, I, Esc) don't fire behind it.
+  const KEYMAP = { '*': '×', x: '×', '/': '÷', '-': '−', Backspace: '⌫', Delete: 'C', ',': '.' };
+  ov._keys = (e) => {
+    if (e.key === 'Escape') closeCalcPad();
+    else if (e.key === 'Enter') { if (input) use(); else press('='); }
+    else { const k = KEYMAP[e.key] || e.key; if (CALC_KEYS.includes(k)) press(k); else return; }
+    e.preventDefault(); e.stopPropagation();
+  };
+  window.addEventListener('keydown', ov._keys, true);
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) closeCalcPad(); });
+  $$('[data-k]', ov).forEach((b) => b.onclick = () => press(b.dataset.k));
+  $('[data-calc-close]', ov).onclick = closeCalcPad;
+  if (input) $('#calcUse', ov).onclick = use;
+  // On its own: the answer can go straight into a new income or expense.
+  $$('[data-calc-add]', ov).forEach((b) => b.onclick = () => { const r = calcEval(expr); if (!(r > 0)) return; closeCalcPad(); txForm({ type: b.dataset.calcAdd, amount: r }); });
+  document.activeElement?.blur?.(); // on phones: hide the typing keyboard, the keypad replaces it
+  document.body.appendChild(ov);
+  show();
+  return ov;
+}
+function closeCalcPad() {
+  const ov = $('#calcPad'); if (!ov) return;
+  window.removeEventListener('keydown', ov._keys, true); ov.remove();
+}
+
+/* Money tools (the Calculator page). Plain sums, kept apart so the tests can check them. */
+const toolMath = {
+  discount: (price, pct) => { const off = round2(price * pct / 100); return { off, pay: round2(price - off) }; },
+  split: (total, people, extraPct = 0) => { const all = round2(total * (1 + extraPct / 100)); return { all, each: round2(all / people) }; },
+  // Monthly payment of a loan or lease: amount × r / (1 − (1 + r)^−months), r = yearly rate ÷ 12.
+  loan: (amount, yearRate, months) => {
+    const r = yearRate / 1200; const pay = r ? amount * r / (1 - Math.pow(1 + r, -months)) : amount / months;
+    return { monthly: round2(pay), total: round2(pay * months), interest: round2(pay * months - amount) };
+  },
+  saving: (target, saved, days) => {
+    const left = round2(Math.max(0, target - saved));
+    return { left, perWeek: round2(left / Math.max(1, days / 7)), perMonth: round2(left / Math.max(1, days / 30.4375)) };
+  },
+};
+const TOOLS = [
+  ['discount', 'Discount or percentage', [['price', 'Price'], ['pct', 'Discount %', 'e.g. 15']]],
+  ['split', 'Split a bill', [['total', 'Bill total'], ['people', 'People', 'e.g. 4'], ['extra', 'Service charge or tip %', 'optional']]],
+  ['loan', 'Loan or lease: monthly payment', [['amount', 'Loan amount'], ['rate', 'Interest % per year', 'e.g. 12'], ['months', 'Months', 'e.g. 24']]],
+  ['saving', 'Saving for something', [['target', 'Target amount'], ['saved', 'Already saved', 'optional'], ['date', 'By date']]],
+];
+function toolResult(tool) {
+  const v = ui.tools[tool] || {};
+  const n = (k) => calcEval(v[k]);
+  const row = (label, value, strong) => `<div class="tool-row ${strong ? 'strong' : ''}"><span>${label}</span><b>${moneyHtml(value)}</b></div>`;
+  const wait = (text) => `<p class="hint">${text}</p>`;
+  if (tool === 'discount') {
+    if (!(n('price') > 0) || n('pct') === null) return wait('Enter a price and a percentage.');
+    const r = toolMath.discount(n('price'), n('pct'));
+    return row('You save', r.off) + row('You pay', r.pay, true) + `<button class="btn small" data-tool-add="${r.pay}">${icon('plus')}Add as expense</button>`;
+  }
+  if (tool === 'split') {
+    const people = Math.round(n('people') || 0);
+    if (!(n('total') > 0) || people < 1) return wait('Enter the bill total and how many people.');
+    const r = toolMath.split(n('total'), people, n('extra') || 0);
+    return row('Total to pay', r.all) + row('Each person pays', r.each, true) + `<button class="btn small" data-tool-add="${r.each}">${icon('plus')}Add my share as expense</button>`;
+  }
+  if (tool === 'loan') {
+    const months = Math.round(n('months') || 0);
+    if (!(n('amount') > 0) || n('rate') === null || n('rate') < 0 || months < 1) return wait('Enter the amount, the yearly interest and the number of months.');
+    const r = toolMath.loan(n('amount'), n('rate'), months);
+    return row('Each month', r.monthly, true) + row('Interest in total', r.interest) + row('You pay back', r.total);
+  }
+  if (tool === 'saving') {
+    if (!(n('target') > 0) || !v.date) return wait('Enter what you need and by when.');
+    const days = daysBetween(today(), v.date);
+    if (days < 1) return wait('Pick a date after today.');
+    const r = toolMath.saving(n('target'), n('saved') || 0, days);
+    if (!r.left) return wait('You already have enough. Well done!');
+    return row('Still needed', r.left) + row('Put aside each week', r.perWeek, true) + row('or each month', r.perMonth)
+      + `<button class="btn small" data-tool-goal="${n('target')}" data-tool-saved="${n('saved') || 0}" data-tool-date="${esc(v.date)}">${icon('flag')}Make it a savings goal</button>`;
+  }
+  return '';
+}
+function viewTools() {
+  const sym = esc(state.settings.symbol);
+  const isMoney = new Set(['price', 'total', 'amount', 'target', 'saved']);
+  const cards = TOOLS.map(([tool, title, fields]) => `<div class="panel tool"><h2>${title}</h2><div class="tool-fields">${fields.map(([k, label, ph]) => {
+    const value = esc(ui.tools[tool]?.[k] ?? '');
+    return `<label class="field"><span>${label}${isMoney.has(k) ? ` (${sym})` : ''}</span>${k === 'date'
+      ? `<input class="input" type="date" data-tool="${tool}" data-f="${k}" min="${addDays(today(), 1)}" value="${value}">`
+      : `<input class="input${isMoney.has(k) ? ' calc' : ''}" type="text" inputmode="decimal" autocomplete="off" data-tool="${tool}" data-f="${k}" placeholder="${ph || '0'}" value="${value}">`}</label>`;
+  }).join('')}</div><div class="tool-out" id="out-${tool}">${toolResult(tool)}</div></div>`).join('');
+  return `<div class="head"><div><h1>Calculator</h1><p>Quick money sums. You can also type a sum like 1200+350 in any amount box, or tap the ${icon('calc')} button in it.</p></div>
+    <div class="actions"><button class="btn primary" id="openPad">${icon('calc')}Open calculator</button></div></div>
+    <div class="tools">${cards}</div>`;
+}
+function bindTools(root) {
+  $('#openPad', root).onclick = () => calcPad();
+  const bindOut = (out) => {
+    $$('[data-tool-add]', out).forEach((b) => b.onclick = () => txForm({ type: 'expense', amount: +b.dataset.toolAdd }));
+    $$('[data-tool-goal]', out).forEach((b) => b.onclick = () => goalForm({ target: +b.dataset.toolGoal, saved: +b.dataset.toolSaved, deadline: b.dataset.toolDate }));
+  };
+  $$('.tool-out', root).forEach(bindOut);
+  $$('[data-tool]', root).forEach((input) => input.oninput = () => {
+    const tool = input.dataset.tool;
+    (ui.tools[tool] ||= {})[input.dataset.f] = input.value;
+    const out = $('#out-' + tool, root); out.innerHTML = toolResult(tool); bindOut(out);
+  });
+}
+
 /* ================= views ================= */
 /* On phones only the first four pages fit in the bottom bar; the rest live behind "More". */
 const PHONE_BAR = ['dashboard', 'transactions', 'budgets', 'reports'];
 const NAV = [
   ['dashboard', 'This week', 'home'], ['transactions', 'Transactions', 'list'], ['budgets', 'Budgets', 'target'],
   ['goals', 'Savings goals', 'flag'], ['recurring', 'Scheduled', 'repeat'], ['reports', 'Reports', 'chart'],
-  ['accounts', 'Accounts', 'wallet'], ['settings', 'Settings', 'gear'],
+  ['accounts', 'Accounts', 'wallet'], ['tools', 'Calculator', 'calc'], ['settings', 'Settings', 'gear'],
 ];
 
 function greeting() {
@@ -598,7 +822,7 @@ function viewDashboard() {
 
   return `<div class="head home-head"><div class="head-title"><h1>${esc(greeting())}</h1><p>${DAY_LONG[parseISO(t).getDay()]}, ${parseISO(t).getDate()} ${MONTH_LONG[parseISO(t).getMonth()]}</p></div>
     <div class="head-tools">${cloudButton()}${themeToggle()}</div>
-    <div class="actions"><button class="btn" data-add="income">${icon('plus')}Income</button><button class="btn primary" data-add="expense">${icon('plus')}Expense</button></div></div>
+    <div class="actions"><button class="btn" data-add="income">${icon('plus')}Income</button><button class="btn primary" data-add="expense">${icon('plus')}Expense</button><button class="btn calc-open" data-calc-pad aria-label="Calculator" title="Calculator">${icon('calc')}</button></div></div>
     <section class="runway" aria-label="Today and this week">${lead}<div class="days">${daysHtml}</div>${notes}</section>
     ${alertHtml}
     ${backupCard()}
@@ -803,7 +1027,7 @@ function weeklyLimitForm() {
   const s = state.settings;
   openModal({
     title: 'Weekly spending limit',
-    body: `<div class="stack"><label class="field"><span>Most I want to spend per week (${esc(s.symbol)})</span><input class="input amount" id="wb" type="number" min="0" step="1" value="${s.weeklyBudget || ''}" placeholder="0" autofocus></label>
+    body: `<div class="stack"><label class="field"><span>Most I want to spend per week (${esc(s.symbol)})</span><input class="input amount calc" id="wb" type="text" inputmode="decimal" autocomplete="off" value="${s.weeklyBudget || ''}" placeholder="0" autofocus></label>
       <p class="hint">Fixed costs like rent and bills don’t count toward this. Set it to 0 to turn the limit off.</p></div>`,
     foot: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="wbSave">Save limit</button>',
     onMount: (m) => {
@@ -817,7 +1041,7 @@ function budgetForm(b = {}) {
   openModal({
     title: b.id ? 'Edit budget' : 'New category budget',
     body: `<div class="stack"><label class="field"><span>Category</span><select class="input" id="bc">${catOptions('expense', b.categoryId)}</select></label>
-      <div class="grid2"><label class="field"><span>Limit (${esc(state.settings.symbol)})</span><input class="input" id="ba" type="number" min="0" value="${b.amount || ''}" autofocus></label>
+      <div class="grid2"><label class="field"><span>Limit (${esc(state.settings.symbol)})</span><input class="input calc" id="ba" type="text" inputmode="decimal" autocomplete="off" value="${b.amount || ''}" autofocus></label>
       <label class="field"><span>Resets</span><select class="input" id="bp"><option value="weekly" ${b.period === 'weekly' ? 'selected' : ''}>Every week</option><option value="monthly" ${b.period !== 'weekly' ? 'selected' : ''}>Every month</option></select></label></div></div>`,
     foot: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="bs">Save budget</button>',
     onMount: (m) => $('#bs', m).onclick = () => {
@@ -856,9 +1080,9 @@ function goalForm(g = {}) {
   openModal({
     title: g.id ? 'Edit goal' : 'New savings goal',
     body: `<div class="stack"><label class="field"><span>What are you saving for?</span><input class="input" id="gn" value="${esc(g.name || '')}" placeholder="e.g. Emergency fund" autofocus maxlength="60"></label>
-      <div class="grid2"><label class="field"><span>Target amount (${esc(state.settings.symbol)})</span><input class="input" id="gt" type="number" min="0" value="${g.target || ''}"></label>
+      <div class="grid2"><label class="field"><span>Target amount (${esc(state.settings.symbol)})</span><input class="input calc" id="gt" type="text" inputmode="decimal" autocomplete="off" value="${g.target || ''}"></label>
       <label class="field"><span>Target date <span class="muted" style="font-weight:400">(optional)</span></span><input class="input" id="gd" type="date" value="${g.deadline || ''}"></label></div>
-      ${g.id ? '' : `<label class="field"><span>Already saved (${esc(state.settings.symbol)})</span><input class="input" id="gs" type="number" min="0" value="0"></label>`}</div>`,
+      ${g.id ? '' : `<label class="field"><span>Already saved (${esc(state.settings.symbol)})</span><input class="input calc" id="gs" type="text" inputmode="decimal" autocomplete="off" value="${g.saved || 0}"></label>`}</div>`,
     foot: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="gsave">Save goal</button>',
     onMount: (m) => $('#gsave', m).onclick = () => {
       const name = $('#gn', m).value.trim(); const target = round2(parseFloat($('#gt', m).value));
@@ -873,7 +1097,7 @@ function goalForm(g = {}) {
 function goalMoney(g, dir) {
   openModal({
     title: dir > 0 ? `Add to ${g.name}` : `Take out of ${g.name}`,
-    body: `<div class="stack"><label class="field"><span>Amount (${esc(state.settings.symbol)})</span><input class="input amount" id="ga" type="number" min="0" autofocus></label>
+    body: `<div class="stack"><label class="field"><span>Amount (${esc(state.settings.symbol)})</span><input class="input amount calc" id="ga" type="text" inputmode="decimal" autocomplete="off" autofocus></label>
       <label class="field"><span>${dir > 0 ? 'Take it from' : 'Put it back into'}</span><select class="input" id="gacc"><option value="">Don’t change any account</option>${accOptions()}</select></label>
       <p class="hint">Choosing an account moves the money out of that balance${dir > 0 ? ' and into the goal' : ''}.</p></div>`,
     foot: `<button class="btn" data-close>Cancel</button><button class="btn primary" id="gok">${dir > 0 ? 'Add money' : 'Take out'}</button>`,
@@ -913,7 +1137,7 @@ function recForm(saved = {}) {
   let type = r.type || 'expense';
   const body = () => `<div class="stack"><div class="seg type" id="rtype">${['expense', 'income'].map((v) => `<button type="button" data-v="${v}" class="${v === type ? 'on' : ''}">${v[0].toUpperCase() + v.slice(1)}</button>`).join('')}</div>
     <label class="field"><span>Name</span><input class="input" id="rn" value="${esc(r.note || '')}" placeholder="${type === 'income' ? 'e.g. Salary' : 'e.g. Netflix, Rent'}" autofocus maxlength="60"></label>
-    <div class="grid2"><label class="field"><span>Amount (${esc(state.settings.symbol)})</span><input class="input" id="ra" type="number" min="0" value="${r.amount || ''}"></label>
+    <div class="grid2"><label class="field"><span>Amount (${esc(state.settings.symbol)})</span><input class="input calc" id="ra" type="text" inputmode="decimal" autocomplete="off" value="${r.amount || ''}"></label>
     <label class="field"><span>Category</span><select class="input" id="rc">${catOptions(type, r.categoryId)}</select></label>
     <label class="field"><span>Repeats</span><select class="input" id="rf">${Object.entries(FREQ).map(([k, v]) => `<option value="${k}" ${(r.frequency || 'monthly') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
     <label class="field"><span>${r.id ? 'Next date' : 'First date'}</span><input class="input" id="rd" type="date" value="${r.nextDate || today()}"></label></div>
@@ -1006,7 +1230,7 @@ function accForm(a = {}) {
   openModal({
     title: a.id ? 'Edit account' : 'New account',
     body: `<div class="stack"><label class="field"><span>Name</span><input class="input" id="an" value="${esc(a.name || '')}" placeholder="e.g. Cash, Savings, Credit card, eZ Cash" autofocus maxlength="40"></label>
-      <label class="field"><span>Current balance (${esc(state.settings.symbol)})</span><input class="input" id="ai" type="number" value="${a.id ? accountBalance(a) : 0}"></label>
+      <label class="field"><span>Current balance (${esc(state.settings.symbol)})</span><input class="input calc" id="ai" type="text" inputmode="decimal" autocomplete="off" value="${a.id ? accountBalance(a) : 0}"></label>
       <p class="hint">Enter what’s in the account right now. For a credit card you owe money on, use a negative number.</p>
       <div class="field"><span>Colour</span>${swatches(a.color || PALETTE[state.accounts.length % PALETTE.length])}</div></div>`,
     foot: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="as">Save account</button>',
@@ -1385,9 +1609,9 @@ function viewWelcome() {
       <label class="field"><span>What should we call you?</span><input class="input" id="wName" placeholder="Your first name" maxlength="30" autofocus></label>
       <div class="grid2"><label class="field"><span>Currency</span><select class="input" id="wCur">${CURRENCIES.map(([c, sym]) => `<option value="${c}" ${s.currency === c ? 'selected' : ''}>${c} (${sym})</option>`).join('')}</select></label>
       <label class="field"><span>Week starts on</span><select class="input" id="wWeek"><option value="1">Monday</option><option value="0">Sunday</option><option value="6">Saturday</option></select></label></div>
-      <div class="grid2"><label class="field"><span>Cash you have now</span><input class="input" id="wCash" type="number" min="0" placeholder="0"></label>
-      <label class="field"><span>Money in the bank now</span><input class="input" id="wBank" type="number" min="0" placeholder="0"></label></div>
-      <label class="field"><span>Most you want to spend in a week</span><input class="input" id="wLimit" type="number" min="0" placeholder="e.g. 5000"></label>
+      <div class="grid2"><label class="field"><span>Cash you have now</span><input class="input calc" id="wCash" type="text" inputmode="decimal" autocomplete="off" placeholder="0"></label>
+      <label class="field"><span>Money in the bank now</span><input class="input calc" id="wBank" type="text" inputmode="decimal" autocomplete="off" placeholder="0"></label></div>
+      <label class="field"><span>Most you want to spend in a week</span><input class="input calc" id="wLimit" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 5000"></label>
       <p class="hint">Leave out rent and bills. You can change any of this later in Settings.</p>
       <button class="btn primary" id="wGo" style="padding:11px">Start tracking</button>
     </div></div></div>
@@ -1415,7 +1639,7 @@ function render() {
   hideTip(); // a tip from the previous page must not stay on screen
   const root = $('#root');
   if (!state.settings.onboarded) { root.innerHTML = viewWelcome(); bindWelcome(); return; }
-  const views = { dashboard: viewDashboard, transactions: viewTransactions, budgets: viewBudgets, goals: viewGoals, recurring: viewRecurring, reports: viewReports, accounts: viewAccounts, settings: viewSettings };
+  const views = { dashboard: viewDashboard, transactions: viewTransactions, budgets: viewBudgets, goals: viewGoals, recurring: viewRecurring, reports: viewReports, accounts: viewAccounts, tools: viewTools, settings: viewSettings };
   const scroll = $('.main')?.scrollTop || 0;
   chartSpecs.length = 0;
   const w = weekInfo();
@@ -1425,19 +1649,48 @@ function render() {
     <div class="side-foot">${w.B ? `Left this week<strong>${moneyHtml(w.remaining)}</strong>` : `Balance<strong>${moneyHtml(totalBalance())}</strong>`}
       <div class="credit">Designed &amp; developed by ${AUTHOR.replace(' ', '&nbsp;')}</div></div></aside>
     <main class="main"><div class="page">${views[ui.view]()}</div></main>
-    <button class="fab" data-add="expense" aria-label="Add expense">${icon('plus')}</button></div>`;
+    ${fabMenu()}</div>`;
   drawCharts();
   $('.main').scrollTop = scroll;
   bindCommon(root);
   if (ui.view === 'transactions') bindTransactions(root);
   if (ui.view === 'settings') bindSettings(root);
+  if (ui.view === 'tools') bindTools(root);
   if (ui.view === 'reports') $$('#rp button', root).forEach((b) => b.onclick = () => { ui.reportPeriod = b.dataset.v; render(); });
+}
+/* Phones: the round + button. Tapping it fans out the main actions in an arc around it. */
+const FAB_ITEMS = [['expense', 'Expense', 'minus'], ['income', 'Income', 'plus'], ['transfer', 'Transfer', 'swap'], ['calc', 'Calculator', 'calc']];
+const FAB_RADIUS = 150; // px from the + to each button
+function fabMenu() {
+  const items = FAB_ITEMS.map(([act, label, ic], i) => {
+    const a = (90 + i * 30) * Math.PI / 180; // 90° = straight up, 180° = straight left
+    const x = Math.round(Math.cos(a) * FAB_RADIUS), y = Math.round(-Math.sin(a) * FAB_RADIUS);
+    return `<button class="fab-item ${act}" data-fab="${act}" tabindex="-1" style="--x:${x}px;--y:${y}px;--i:${i}"><span class="fab-ic">${icon(ic)}</span><span class="fab-label">${label}</span></button>`;
+  }).join('');
+  return `<div class="fab-wrap" id="fabWrap"><div class="fab-dim" data-fab-close></div>${items}
+    <button class="fab" id="fab" aria-label="Quick actions" aria-expanded="false">${icon('plus')}</button></div>`;
+}
+function setFab(open) {
+  const w = $('#fabWrap'); if (!w) return;
+  w.classList.toggle('open', open);
+  $('#fab', w).setAttribute('aria-expanded', String(open));
+  $$('.fab-item', w).forEach((b) => { b.tabIndex = open ? 0 : -1; });
 }
 function bindCommon(root) {
   const on = (sel, fn) => $$(sel, root).forEach((el) => el.onclick = () => fn(el));
   on('[data-nav]', (el) => { ui.view = el.dataset.nav; $('.main').scrollTop = 0; render(); $('.main').scrollTop = 0; });
   on('[data-go]', (el) => { ui.view = el.dataset.go; render(); $('.main').scrollTop = 0; });
   on('[data-add]', (el) => txForm({ type: el.dataset.add }));
+  on('[data-calc-pad]', () => calcPad());
+  on('#fab', () => setFab(!$('#fabWrap').classList.contains('open')));
+  on('[data-fab-close]', () => setFab(false));
+  on('[data-fab]', (el) => {
+    setFab(false);
+    const act = el.dataset.fab;
+    if (act === 'calc') calcPad();
+    else if (act === 'transfer' && state.accounts.length < 2) toast('Add a second account to move money between them');
+    else txForm({ type: act });
+  });
   on('[data-theme-set]', (el) => setTheme(el.dataset.themeSet));
   on('#cloudHead', () => accountForm('signin'));
   on('#moreBtn', () => openModal({
@@ -1649,6 +1902,7 @@ if (window.__LEDGER_TEST__) {
     defaultState, migrate, mergeStates, restoreBox, mergeSummary, render, money, esc, addDays, addMonths, daysBetween, weekStartOf, toISO, parseISO,
     weekInfo, accountBalance, totalBalance, postDueRecurring, nextOccurrence, budgetStatus, filteredTx,
     periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner,
+    calcEval, toolMath, calcPad, settleCalc,
     cloudPanel, accountForm, confirmMerge, syncLine, onCloudChange, renderSoon, backupDue, saveBackup, snoozeBackup, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
   };
 } else {
