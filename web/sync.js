@@ -38,6 +38,7 @@
   const store = {
     load: (uid) => { try { return JSON.parse(local.get('pocket-ledger-sync:' + uid) || 'null'); } catch { return null; } },
     save: (uid, meta) => local.set('pocket-ledger-sync:' + uid, JSON.stringify(meta)),
+    clear: (uid) => local.del('pocket-ledger-sync:' + uid),
     lastUid: () => local.get('pocket-ledger-sync-last'),
     setLastUid: (uid) => local.set('pocket-ledger-sync-last', uid),
   };
@@ -163,7 +164,9 @@
   async function signOut() {
     const { auth, A } = await load();
     stopSync(); // stop listening before the sign-in goes away
+    const uid = auth.currentUser && auth.currentUser.uid;
     await A.signOut(auth);
+    if (Core) Core.forgetSync(store, uid); // what's done while signed out is not sent on the next sign-in without asking
   }
   /* Deleting an account needs a fresh sign-in, so we ask for the password again first. */
   async function deleteAccount(password) {
