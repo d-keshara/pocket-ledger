@@ -792,11 +792,12 @@ function viewDashboard() {
       <button class="link-btn" id="setBudget">Change weekly limit (${esc(money(w.B, { short: true }))})</button></div>`;
   }
   const even = w.B / 7;
-  const scaleMax = Math.max(even * 1.5, ...w.days.map((d) => d.spent), 1);
+  // Today's and the coming days' shares count too (with room above), so their dashed lines sit inside the bars, not off the top.
+  const scaleMax = Math.max(even * 1.5, ...w.days.map((d) => d.spent), w.allowanceToday * 1.15, w.perDayAfter * 1.15, 1);
   const daysHtml = w.days.map((d, i) => {
     const dt = parseISO(d.date); const future = i > w.todayIdx; const isToday = i === w.todayIdx;
     const allowance = future ? w.perDayAfter : (isToday ? w.allowanceToday : even);
-    const h = (d.spent / scaleMax) * 100; const ah = w.B ? (Math.min(allowance, scaleMax) / scaleMax) * 100 : 0;
+    const h = (d.spent / scaleMax) * 100; const ah = w.B ? Math.min(97, (allowance / scaleMax) * 100) : 0;
     const over = w.B && d.spent > allowance + 0.001;
     const tipTxt = `${fmtDate(d.date, { full: true })}<br>${future ? `Plan up to <b>${esc(money(allowance))}</b>` : `Spent <b>${esc(money(d.spent))}</b>${w.B ? `<br>Daily share ${esc(money(allowance))}` : ''}`}`;
     return `<div class="day ${future ? 'future' : ''} ${isToday ? 'today' : ''}" data-tip="${esc(tipTxt)}">
