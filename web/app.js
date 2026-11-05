@@ -33,6 +33,7 @@ const ICONS = {
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
   alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  sliders: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
   swap: '<path d="M7 16V4M3 8l4-4 4 4M17 8v12M21 16l-4 4-4-4"/>',
   pause: '<path d="M8 5v14M16 5v14"/>',
   play: '<path d="M7 4l13 8-13 8z"/>',
@@ -955,6 +956,8 @@ function filteredTx() {
 }
 function viewTransactions() {
   const f = ui.tx; const list = filteredTx();
+  // Phones: the four filters fold away behind one "Filters" button; the count shows how many are changed.
+  const nFilters = [f.period !== 'month', f.type !== 'all', f.cat !== 'all', f.acc !== 'all'].filter(Boolean).length;
   const inc = sum(list.filter((t) => t.type === 'income'), (t) => t.amount), ex = sum(list.filter((t) => t.type === 'expense'), (t) => t.amount);
   const periods = [['week', 'This week'], ['month', 'This month'], ['lastmonth', 'Last month'], ['30', 'Last 30 days'], ['3m', 'Last 3 months'], ['year', 'This year'], ['all', 'All time'], ['custom', 'Custom dates']];
   return `<div class="head"><div><h1>Transactions</h1><p>Search, filter and edit everything you’ve logged.</p></div>
@@ -962,11 +965,15 @@ function viewTransactions() {
     <div class="panel">
       <div class="filters">
         <input class="input search" id="fq" placeholder="Search notes, categories or amounts" value="${esc(f.q)}">
+        <button class="btn filter-toggle ${ui.txFiltersOpen ? 'on' : ''}" id="fToggle" aria-expanded="${!!ui.txFiltersOpen}" aria-controls="fMore">${icon('sliders')}Filters${nFilters ? ` <span class="filter-count">${nFilters}</span>` : ''}</button>
+        <div class="filter-more ${ui.txFiltersOpen ? 'open' : ''}" id="fMore">
         <select class="input" id="fperiod">${periods.map(([v, l]) => `<option value="${v}" ${f.period === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
         ${f.period === 'custom' ? `<input class="input" type="date" id="ffrom" value="${f.from}"><input class="input" type="date" id="fto" value="${f.to}">` : ''}
         <select class="input" id="ftype">${[['all', 'All types'], ['expense', 'Expenses'], ['income', 'Income'], ['transfer', 'Transfers']].map(([v, l]) => `<option value="${v}" ${f.type === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
         <select class="input" id="fcat"><option value="all">All categories</option>${state.categories.map((c) => `<option value="${c.id}" ${f.cat === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
         <select class="input" id="facc"><option value="all">All accounts</option>${accOptions(f.acc)}</select>
+        ${nFilters ? '<button class="link-btn filter-reset" id="fReset" type="button">Reset filters</button>' : ''}
+        </div>
       </div>
       <div class="summary-bar"><span>Income <b class="pos">${moneyHtml(inc)}</b></span><span>Expenses <b>${moneyHtml(ex)}</b></span><span>Net <b class="${inc - ex < 0 ? 'neg' : ''}">${moneyHtml(inc - ex, { sign: true })}</b></span><span>${list.length} transaction${list.length === 1 ? '' : 's'}</span></div>
       ${list.length ? txListGrouped(list) : empty('search', state.transactions.length ? 'No matches' : 'No transactions yet', state.transactions.length ? 'Try a different period or clear the search.' : 'Add income and expenses to start tracking.', state.transactions.length ? '' : `<button class="btn primary" data-add="expense">${icon('plus')}Add expense</button>`)}
@@ -984,6 +991,8 @@ function bindTransactions(root) {
   $('#ffrom', root) && ($('#ffrom', root).onchange = (e) => { f.from = e.target.value; rerender(); });
   $('#fto', root) && ($('#fto', root).onchange = (e) => { f.to = e.target.value; rerender(); });
   $('#exportCsv', root).onclick = () => exportCsv(filteredTx());
+  $('#fToggle', root).onclick = () => { ui.txFiltersOpen = !ui.txFiltersOpen; render(); };
+  $('#fReset', root) && ($('#fReset', root).onclick = () => { Object.assign(f, { period: 'month', type: 'all', cat: 'all', acc: 'all', from: '', to: '' }); rerender(); });
 }
 async function exportCsv(list) {
   const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;

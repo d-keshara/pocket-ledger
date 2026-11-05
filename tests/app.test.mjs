@@ -691,6 +691,27 @@ describe('Play Store update card (phone app)', () => {
   });
 });
 
+/* ------------------------------------------ transactions: Filters button */
+describe('transactions filters (phones fold them behind a Filters button)', () => {
+  test('the button opens and closes the filters, counts the changed ones, and Reset puts them back', (t) => {
+    const { L, doc, close } = makeApp(); t.after(close);
+    L.ui.view = 'transactions'; L.render();
+    const more = () => doc.querySelector('#fMore');
+    assert.ok(!more().classList.contains('open'));
+    assert.equal(doc.querySelector('.filter-count'), null);         // nothing changed: no number
+    doc.querySelector('#fToggle').click();
+    assert.ok(more().classList.contains('open'));
+    assert.equal(doc.querySelector('#fToggle').getAttribute('aria-expanded'), 'true');
+    const type = doc.querySelector('#ftype'); type.value = 'income'; type.onchange({ target: type });
+    const period = doc.querySelector('#fperiod'); period.value = 'all'; period.onchange({ target: period });
+    assert.equal(doc.querySelector('.filter-count').textContent, '2');
+    doc.querySelector('#fReset').click();
+    assert.equal(L.ui.tx.type, 'all');
+    assert.equal(L.ui.tx.period, 'month');
+    assert.equal(doc.querySelector('.filter-count'), null);
+  });
+});
+
 /* ------------------------------------------- home page accounts strip */
 describe('accounts on the home page', () => {
   test('each account shows with its balance, and tapping one opens Accounts', (t) => {

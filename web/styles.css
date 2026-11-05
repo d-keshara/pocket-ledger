@@ -499,6 +499,11 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
 .filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
 .filters .input { width: auto; min-width: 140px; }
 .filters .search { flex: 1; min-width: 200px; }
+/* Desktop: the filters sit in the row as before; the Filters button is only for phones. */
+.filter-more { display: contents; }
+.filter-toggle { display: none; }
+.filter-count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: 11px; font-weight: 700; }
+.filter-reset { font-size: 13px; }
 .summary-bar { display: flex; gap: 26px; flex-wrap: wrap; padding: 12px 0 4px; font-size: 13.5px; color: var(--ink-2); }
 .summary-bar b { font-family: var(--num); font-weight: 600; font-size: 19px; color: var(--ink); }
 .summary-bar b.pos { color: var(--good); } .summary-bar b.neg { color: var(--danger); }
@@ -816,7 +821,14 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
   .hbar .lbl { grid-area: lbl; }
   .hbar .v { grid-area: v; }
   .hbar .track { grid-area: track; height: 10px; }
-  .filters .input { flex: 1 1 45%; min-width: 0; }
+  /* One row: search + Filters button. The filters open under it, in two columns. */
+  .filters .search { flex: 1 1 0; min-width: 0; }
+  .filter-toggle { display: inline-flex; flex: none; }
+  .filter-toggle.on { border-color: var(--accent); }
+  .filter-more { display: none; }
+  .filter-more.open { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: 1 1 100%; }
+  .filter-more .input { width: 100%; min-width: 0; }
+  .filter-more .filter-reset { grid-column: 1 / -1; justify-self: start; }
   .panel { overflow-x: auto; }          /* wide tables scroll inside their box, not the page */
 
   /* 5. Modals become "bottom sheets" that slide up from the bottom like native apps */
