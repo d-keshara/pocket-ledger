@@ -1262,7 +1262,7 @@ describe('sync & account', () => {
     L.ui.view = 'settings'; L.render();
     assert.ok(doc.querySelector('#backup'));
     assert.equal(doc.querySelector('#cloudUp'), null);
-    assert.match(doc.body.textContent, /Everything is stored only on this device/);
+    assert.match(doc.body.textContent, /Your money data is stored only on this device/);
   });
 
   test('the home page has a Sign in button that opens the form, and shows Account once signed in', async (t) => {
@@ -1294,7 +1294,7 @@ describe('sync & account', () => {
     doc.querySelector('#doneOk').click();
     assert.equal(doc.querySelector('#overlay'), null);
     assert.match(doc.body.textContent, /me@example.com/);
-    assert.doesNotMatch(doc.body.textContent, /Your data never leaves your device/);
+    assert.doesNotMatch(doc.body.textContent, /stored only on this device/);
   });
 
   test('a weak password is stopped before asking Firebase, and the rules show what is missing', (t) => {

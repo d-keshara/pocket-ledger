@@ -24,7 +24,7 @@ WHAT YOU CAN DO
 • Optional sync: create a free account to use the same data on your phone and computer, updated live
 
 PRIVATE BY DEFAULT
-• No account needed: without one, your data never leaves your phone
+• No account needed: without one, your money data stays on your phone
 • Sync only if you choose to, and delete your account and its data any time
 • No ads, no analytics, no tracking
 • Save a backup file whenever you like and keep it wherever you choose, such as Google Drive or your phone's storage

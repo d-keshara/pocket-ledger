@@ -1407,7 +1407,7 @@ function viewSettings() {
   const row = (label, control, hint = '') => `<div class="set-row"><div class="set-label"><b>${label}</b>${hint ? `<span class="hint">${hint}</span>` : ''}</div>${control}</div>`;
   const seg = (attr, value, opts) => `<div class="seg set-seg" role="radiogroup">${opts.map(([v, l]) => `<button type="button" role="radio" aria-checked="${String(v) === String(value)}" class="${String(v) === String(value) ? 'on' : ''}" ${attr}="${v}">${l}</button>`).join('')}</div>`;
   const action = (id, ic, label, cls = '') => `<button class="set-action ${cls}" id="${id}" type="button">${icon(ic)}<span>${label}</span>${cls ? '' : icon('chevron')}</button>`;
-  return `<div class="head"><div><h1>Settings</h1><p>Make it yours.${signedIn ? '' : ' Everything is stored only on this device.'}</p></div></div>
+  return `<div class="head"><div><h1>Settings</h1><p>Make it yours.${signedIn ? ' Your data is synced to your account.' : ' Your money data is stored only on this device.'}</p></div></div>
     <div class="settings">
       <section class="set-group"><h2 class="set-title">Profile</h2><div class="set-card">
         ${row('Your name', `<input class="input" id="sName" value="${esc(s.name)}" maxlength="30" placeholder="Your name" aria-label="Your name">`)}
@@ -1439,7 +1439,7 @@ function viewSettings() {
     <section class="about" aria-label="About">
       ${logo(44)}
       <div class="about-text"><strong>Pocket Ledger</strong><span>Version ${APP_VERSION}</span></div>
-      <div class="about-credit">Designed and developed by <b>${AUTHOR}</b><span>© ${now().getFullYear()} ${AUTHOR}.${signedIn ? '' : ' Your data never leaves your device.'}</span></div>
+      <div class="about-credit">Designed and developed by <b>${AUTHOR}</b><span>© ${now().getFullYear()} ${AUTHOR}. All rights reserved.</span></div>
     </section>`;
 }
 function catForm(c = {}, type) {
