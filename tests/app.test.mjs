@@ -138,6 +138,22 @@ describe('weekly runway (what you can spend today)', () => {
     assert.equal(L.weekInfo().days[2].share, L.weekInfo().allowanceToday);
   });
 
+  test('an expense dated later this week shows on that day as planned, and does not change the pace', (t) => {
+    const { L, S, doc, add, expenseCat, close } = makeApp(); t.after(close); // Wed 7 Oct
+    S.settings.weeklyBudget = 7000;
+    const food = expenseCat('Food').id;
+    add({ type: 'expense', amount: 300, date: '2026-10-07', categoryId: food });  // today
+    add({ type: 'expense', amount: 2500, date: '2026-10-10', categoryId: food }); // Saturday, dated ahead
+    L.ui.view = 'dashboard'; L.render();
+    const sat = doc.querySelectorAll('.day')[5];
+    assert.ok(sat.querySelector('.fill.planned'), 'Saturday shows a planned bar');
+    assert.equal(sat.querySelector('.fill.over'), null);           // never red: its share is on top of what is planned
+    assert.match(sat.querySelector('.amt').textContent, /2,500/);
+    assert.match(sat.getAttribute('data-tip'), /Already planned/);
+    // Pace: 300 spent over Mon-Wed (3 days) -> 700 for the week, not (300 + 2500) / 3 * 7.
+    assert.match(doc.querySelector('.runway-note').textContent, /On pace for\s*Rs\s?700/);
+  });
+
   test('fixed costs (rent) and other weeks are not counted', (t) => {
     const { L, S, add, expenseCat, close } = makeApp(); t.after(close);
     S.settings.weeklyBudget = 7000;

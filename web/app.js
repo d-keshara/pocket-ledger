@@ -776,7 +776,9 @@ function viewDashboard() {
   const lastW = weekInfo(addDays(w.start, -7));
   const lastWSamePoint = sum(lastW.days.slice(0, w.todayIdx + 1), (d) => d.spent);
   const elapsed = w.todayIdx + 1;
-  const projected = round2((w.spent / elapsed) * 7);
+  // The pace counts only what was spent up to today; an expense dated later in the week (rent on Saturday) is not "pace".
+  const spentSoFar = round2(sum(w.days.slice(0, elapsed), (d) => d.spent));
+  const projected = round2((spentSoFar / elapsed) * 7);
   const noSpend = w.days.slice(0, w.todayIdx).filter((d) => d.spent === 0).length;
 
   /* The big number: what's left to spend today (with a weekly limit) or what was spent this week (without one).
@@ -806,17 +808,22 @@ function viewDashboard() {
     const allowance = d.share;
     const h = (d.spent / scaleMax) * 100; const ah = w.B ? Math.min(97, (allowance / scaleMax) * 100) : 0;
     const over = w.B && d.spent > allowance + 0.001;
-    const tipTxt = `${fmtDate(d.date, { full: true })}<br>${future ? `Plan up to <b>${esc(money(allowance))}</b>` : `Spent <b>${esc(money(d.spent))}</b>${w.B ? `<br>Daily share ${esc(money(allowance))}` : ''}`}`;
+    // A future day can already have expenses dated on it (rent on Saturday): shown as a lighter "planned" bar.
+    // Its share is what is left to spend each day on top of those, so the bar is never marked red.
+    const planned = future && d.spent > 0;
+    const tipTxt = `${fmtDate(d.date, { full: true })}<br>${future
+      ? `${planned ? `Already planned <b>${esc(money(d.spent))}</b><br>` : ''}${w.B ? `Plan up to <b>${esc(money(allowance))}</b>${planned ? ' more' : ''}` : ''}`
+      : `Spent <b>${esc(money(d.spent))}</b>${w.B ? `<br>Daily share ${esc(money(allowance))}` : ''}`}`;
     return `<div class="day ${future ? 'future' : ''} ${isToday ? 'today' : ''}" data-tip="${esc(tipTxt)}">
-      <div class="amt">${future ? (w.B && allowance > 0 ? moneyHtml(allowance, { short: true }) : '&nbsp;') : (d.spent > 0 ? moneyHtml(d.spent, { short: true }) : '&nbsp;')}</div>
-      <div class="col">${future ? '' : `<div class="fill ${over ? 'over' : ''}" style="height:${h}%"></div>`}${w.B ? `<div class="allow" style="bottom:${ah}%"></div>` : ''}</div>
+      <div class="amt">${future && !planned ? (w.B && allowance > 0 ? moneyHtml(allowance, { short: true }) : '&nbsp;') : (d.spent > 0 ? moneyHtml(d.spent, { short: true }) : '&nbsp;')}</div>
+      <div class="col">${future ? (planned ? `<div class="fill planned" style="height:${h}%"></div>` : '') : `<div class="fill ${over ? 'over' : ''}" style="height:${h}%"></div>`}${w.B ? `<div class="allow" style="bottom:${ah}%"></div>` : ''}</div>
       <div class="dn">${isToday ? 'Today' : DAY_SHORT[dt.getDay()]}</div></div>`;
   }).join('');
   const diff = w.spent - lastWSamePoint;
   const chip = (html, cls = '') => `<span class="chip ${cls}">${html}</span>`;
   const notes = `<div class="runway-note">
     ${w.B ? chip(w.remaining >= 0 ? `<b>${money(w.remaining, { short: true })}</b> left this week` : `<b>${money(-w.remaining, { short: true })}</b> over this week`, w.remaining >= 0 ? '' : 'neg') : ''}
-    ${w.spent ? chip(`On pace for <b>${money(projected, { short: true })}</b>`, w.B && projected > w.B ? 'neg' : '') : ''}
+    ${spentSoFar ? chip(`On pace for <b>${money(projected, { short: true })}</b>`, w.B && projected > w.B ? 'neg' : '') : ''}
     ${round2(diff) ? chip(`<b>${money(diff, { sign: true, short: true })}</b> vs last week`, diff > 0 ? 'neg' : 'pos') : ''}
     ${chip(`<b>${noSpend}</b> no-spend day${noSpend === 1 ? '' : 's'}`)}
   </div>`;

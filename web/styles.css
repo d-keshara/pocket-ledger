@@ -426,6 +426,7 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
 .day .col { position: relative; width: 100%; max-width: 64px; height: 150px; border-radius: 10px; background: var(--surface-2); overflow: hidden; }
 .day .col .fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--accent); border-radius: 4px 4px 0 0; }
 .day .col .fill.over { background: var(--danger); }
+.day .col .fill.planned { opacity: .45; } /* expenses already dated on a future day */
 .day .col .allow { position: absolute; left: 6px; right: 6px; border-top: 2px dashed var(--muted); opacity: .7; }
 .day.future .col { background: repeating-linear-gradient(135deg, var(--surface-2) 0 6px, transparent 6px 10px); outline: 1px solid var(--line); outline-offset: -1px; }
 .day.today .col { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -534,7 +535,7 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
 
 /* ---------- empty ---------- */
 .empty { text-align: center; padding: 34px 20px; color: var(--ink-2); }
-.empty svg { width: 46px; height: 46px; color: var(--muted); margin-bottom: 8px; }
+.empty > svg { width: 46px; height: 46px; color: var(--muted); margin-bottom: 8px; } /* only the big picture, not the icon inside its button */
 .empty h3 { margin: 0 0 4px; color: var(--ink); font-size: 16px; }
 .empty p { margin: 0 0 14px; }
 
