@@ -881,8 +881,9 @@ input.switch:disabled { opacity: .5; cursor: default; }
   .stats { grid-template-columns: 1fr 1fr; gap: 10px; }
   .stat { padding: 14px; }
   /* Transactions totals: 2 x 2 grid, small label above each big number */
-  .summary-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-  .summary-bar b { font-size: 16px; overflow: hidden; text-overflow: ellipsis; }
+  /* Columns as wide as their numbers (a short "Rs 0.00" leaves room for a long Net), spread across the row. */
+  .summary-bar { grid-template-columns: repeat(3, auto); justify-content: space-between; gap: 8px; }
+  .summary-bar b { font-size: 16px; }
   .stat .v { font-size: 22px; font-size: clamp(19px, 18cqi, 26px); }
   .acc-strip { margin-top: 10px; padding: 12px 14px 14px; }
   /* Two columns; a 3rd, 4th... account goes on the next row, so all can be read without scrolling sideways. */

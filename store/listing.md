@@ -49,6 +49,7 @@ Designed and developed by D. Kezara.
 5. screenshots/5-spending-by-category.png
 6. screenshots/6-savings-goals.png
 7. screenshots/7-dark-mode.png
+8. screenshots/8-settings.png
 
 ## Graphics
 - App icon (512 x 512): icon-512.png
