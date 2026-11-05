@@ -34,6 +34,7 @@ const ICONS = {
   alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
   chevron: '<path d="m9 6 6 6-6 6"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
   sliders: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
   swap: '<path d="M7 16V4M3 8l4-4 4 4M17 8v12M21 16l-4 4-4-4"/>',
   pause: '<path d="M8 5v14M16 5v14"/>',
@@ -411,14 +412,24 @@ function txRow(t) {
     <div class="row-actions"><button class="icon-btn" data-edit-tx="${t.id}" aria-label="Edit">${icon('edit')}</button><button class="icon-btn" data-del-tx="${t.id}" aria-label="Delete">${icon('trash')}</button></div>
   </div>`;
 }
+/* Transactions by day, newest first. Ones dated after today (rent on Saturday) come first in their own
+   "Upcoming" section, soonest first: they haven't happened yet, so they aren't in the totals. */
 function txListGrouped(list) {
-  const groups = {};
-  for (const t of list) (groups[t.date] ||= []).push(t);
-  return `<div class="tx-list">${Object.keys(groups).sort().reverse().map((d) => {
-    const g = groups[d];
-    const net = sum(g, (t) => t.type === 'income' ? t.amount : t.type === 'expense' ? -t.amount : 0);
-    return `<div class="tx-day"><span>${fmtDate(d)}</span><span class="num">${net ? money(net, { sign: true }) : ''}</span></div>${g.map(txRow).join('')}`;
-  }).join('')}</div>`;
+  const t = today();
+  const netOf = (g) => sum(g, (x) => x.type === 'income' ? x.amount : x.type === 'expense' ? -x.amount : 0);
+  const days = (items, newestFirst) => {
+    const groups = {};
+    for (const x of items) (groups[x.date] ||= []).push(x);
+    const keys = Object.keys(groups).sort(); if (newestFirst) keys.reverse();
+    return keys.map((d) => { const net = netOf(groups[d]);
+      return `<div class="tx-day"><span>${fmtDate(d)}</span><span class="num">${net ? money(net, { sign: true }) : ''}</span></div>${groups[d].map(txRow).join('')}`; }).join('');
+  };
+  const up = list.filter((x) => x.date > t), done = list.filter((x) => x.date <= t);
+  const upNet = netOf(up);
+  return `${up.length ? `<section class="tx-upcoming" aria-label="Upcoming">
+      <div class="tx-up-head">${icon('calendar')}<b>Upcoming</b><span class="muted">not counted yet</span><span class="num">${upNet ? money(upNet, { sign: true }) : ''}</span></div>
+      <div class="tx-list">${days(up, false)}</div></section>` : ''}
+    ${done.length ? `<div class="tx-list">${days(done, true)}</div>` : ''}`;
 }
 function bindTxRows(root) {
   $$('[data-edit-tx]', root).forEach((b) => b.onclick = () => txForm(state.transactions.find((t) => t.id === b.dataset.editTx)));
@@ -998,9 +1009,10 @@ function filteredTx() {
 }
 function viewTransactions() {
   const f = ui.tx; const list = filteredTx();
+  const counted = list.filter((t) => t.date <= today()); // totals: up to today (upcoming ones haven't happened yet)
   // Phones: the four filters fold away behind one "Filters" button; the count shows how many are changed.
   const nFilters = [f.period !== 'month', f.type !== 'all', f.cat !== 'all', f.acc !== 'all'].filter(Boolean).length;
-  const inc = sum(list.filter((t) => t.type === 'income'), (t) => t.amount), ex = sum(list.filter((t) => t.type === 'expense'), (t) => t.amount);
+  const inc = sum(counted.filter((t) => t.type === 'income'), (t) => t.amount), ex = sum(counted.filter((t) => t.type === 'expense'), (t) => t.amount);
   const periods = [['week', 'This week'], ['month', 'This month'], ['lastmonth', 'Last month'], ['30', 'Last 30 days'], ['3m', 'Last 3 months'], ['year', 'This year'], ['all', 'All time'], ['custom', 'Custom dates']];
   return `<div class="head"><div><h1>Transactions</h1><p>Search, filter and edit everything you’ve logged.</p></div>
     <div class="actions"><button class="btn" id="exportCsv">${icon('download')}Export CSV</button><button class="btn" data-add="income">${icon('plus')}Income</button><button class="btn primary" data-add="expense">${icon('plus')}Expense</button></div></div>

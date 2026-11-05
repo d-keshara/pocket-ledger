@@ -720,6 +720,24 @@ describe('Play Store update card (phone app)', () => {
   });
 });
 
+/* ------------------------------------------ transactions: Upcoming */
+describe('transactions dated after today', () => {
+  test('they are listed first under "Upcoming", soonest first, and not in the totals', (t) => {
+    const { L, doc, add, expenseCat, close } = makeApp(); t.after(close); // Wed 7 Oct
+    const food = expenseCat('Food').id;
+    add({ type: 'expense', amount: 300, date: '2026-10-06', categoryId: food, note: 'Yesterday lunch' });
+    add({ type: 'expense', amount: 9000, date: '2026-10-20', categoryId: food, note: 'Rent later' });
+    add({ type: 'expense', amount: 2500, date: '2026-10-10', categoryId: food, note: 'Phone bill' });
+    L.ui.view = 'transactions'; L.render();
+    const up = doc.querySelector('.tx-upcoming');
+    assert.ok(up, 'there is an Upcoming section');
+    const upNotes = [...up.querySelectorAll('.tx .t1')].map((x) => x.textContent);
+    assert.equal(upNotes.join('|'), 'Phone bill|Rent later');               // soonest first
+    assert.doesNotMatch(up.textContent, /Yesterday lunch/);
+    assert.match(doc.querySelector('.summary-bar').textContent, /Expenses\s*Rs\s?300\.00/); // only what has happened
+  });
+});
+
 /* ------------------------------------------------- settings controls */
 describe('settings page controls', () => {
   test('week start and mode are buttons; cents is a switch', (t) => {
