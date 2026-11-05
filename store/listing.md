@@ -59,7 +59,15 @@ Designed and developed by D. Kezara.
 - Web version: https://d-keshara.github.io/pocket-ledger/
 - Delete account (Play Console > App content > Data safety > "Delete account URL"): https://d-keshara.github.io/pocket-ledger/account.html?mode=deleteAccount
 
-## What's new in 1.9.3 (release notes, max 500)
+## What's new in 1.9.4 (release notes, max 500)
+New: clearer home page. Left to spend stops at Rs 0 with a red "over" badge; spent above each bar, daily share below.
+New: Upcoming list for future-dated payments, counted only on their date.
+New: warning before an account goes below zero; credit cards can.
+New: flat-rate option in the loan calculator.
+Better: Settings design, phone filters, tap to edit, landscape view.
+Fixed: first week limit, calculator totals, chart scales.
+
+## What's new in 1.9.3, kept for reference (release notes, max 500)
 New: reminders. Turn on a daily reminder, payment-due alerts, a weekly limit warning and a weekly summary in Settings.
 New: your accounts on the home page.
 New: update alert when a new version is ready.
