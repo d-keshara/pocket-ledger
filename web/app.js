@@ -889,6 +889,8 @@ function accountStrip() {
 }
 
 function backupCard() {
+  // Signed in: sync already keeps a copy of everything in the account, so no "back up your data" reminder.
+  if (cloud()?.info().signedIn) return '';
   const days = backupDue();
   if (!days) return '';
   const why = state.settings.lastBackup ? `It’s been ${days} days since your last backup.` : 'You haven’t saved a backup yet.';

@@ -669,6 +669,16 @@ describe('backup reminder', () => {
     }
   };
 
+  test('signed-in (syncing) users never see the reminder; signed-out users still do', (t) => {
+    const app = makeApp(); t.after(app.close);
+    addHistory(app, 10, 30); // a backup is due
+    const { c } = fakeCloud(app.w, { signedIn: true });
+    app.L.ui.view = 'dashboard'; app.L.render();
+    assert.equal(app.doc.querySelector('.alert.backup'), null);
+    c.signedIn = false; app.L.render();
+    assert.ok(app.doc.querySelector('.alert.backup'), 'shown again after signing out');
+  });
+
   test('new users with under 5 transactions are not nagged', (t) => {
     const app = makeApp(); t.after(app.close);
     addHistory(app, 4, 60);
