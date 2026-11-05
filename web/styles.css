@@ -532,6 +532,9 @@ input.switch:disabled { opacity: .5; cursor: default; }
 .tx .t2 { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tx .amt { font-family: var(--num); font-size: 17px; font-weight: 600; text-align: right; }
 .tx .row-actions { display: flex; opacity: 0; transition: opacity .15s; }
+.tx-tap { cursor: pointer; border-radius: 8px; transition: background .12s; margin: 0 -8px; padding-left: 8px; padding-right: 8px; } /* a little room so the highlight is not cut at the text */
+.tx-tap:active { background: var(--surface-2); }
+@media (hover: hover) { .tx-tap:hover { background: color-mix(in srgb, var(--surface-2) 60%, transparent); } }
 .tx:hover .row-actions, .tx:focus-within .row-actions { opacity: 1; }
 .tag { display: inline-block; font-size: 11.5px; padding: 0 7px; border-radius: 5px; background: var(--surface-2); color: var(--ink-2); margin-left: 6px; font-weight: 400; vertical-align: 1px; }
 
@@ -875,6 +878,9 @@ input.switch:disabled { opacity: .5; cursor: default; }
   .filter-more.open { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: 1 1 100%; }
   .filter-more .input { width: 100%; min-width: 0; }
   .filter-more .filter-reset { grid-column: 1 / -1; justify-self: start; }
+  /* Narrow screens: tap the row to edit (Delete is in the edit window), so the note gets the full width. */
+  .tx .row-actions { display: none; }
+  .tx { grid-template-columns: 34px minmax(0, 1fr) auto; }
   .panel { overflow-x: auto; }          /* wide tables scroll inside their box, not the page */
 
   /* 5. Modals become "bottom sheets" that slide up from the bottom like native apps */
@@ -905,7 +911,9 @@ input.switch:disabled { opacity: .5; cursor: default; }
 
 /* Exercise 1: touch screens can't hover, so always show edit/delete */
 @media (hover: none) {
-  .tx .row-actions { opacity: 1; }
+  /* Phones: tap the row to edit (Delete is in the edit window), so the note gets the full width. */
+  .tx .row-actions { display: none; }
+  .tx { grid-template-columns: 34px minmax(0, 1fr) auto; }
   .shortcuts-hint { display: none; } /* keyboard shortcuts mean nothing without a keyboard */
 }
 

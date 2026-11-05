@@ -405,7 +405,8 @@ function txRow(t) {
     glyphColor = c?.color || '#5f6b66'; letter = (c?.name || '?')[0];
     amtCls = t.type === 'income' ? 'pos' : ''; amt = moneyHtml(t.type === 'income' ? t.amount : -t.amount, { sign: true });
   }
-  return `<div class="tx">
+  // The whole row opens the edit window (it has Delete too). The pencil and bin stay for mouse users on wide screens.
+  return `<div class="tx tx-tap" data-edit-row="${t.id}" role="button" tabindex="0" aria-label="Edit ${esc(title)}">
     <div class="glyph" style="background:${glyphColor}">${esc(letter)}</div>
     <div style="min-width:0"><div class="t1">${esc(title)}${t.recurringId ? '<span class="tag">Scheduled</span>' : ''}</div><div class="t2">${sub}</div></div>
     <div class="amt ${amtCls}">${amt}</div>
@@ -432,6 +433,11 @@ function txListGrouped(list) {
     ${done.length ? `<div class="tx-list">${days(done, true)}</div>` : ''}`;
 }
 function bindTxRows(root) {
+  const open = (row) => txForm(state.transactions.find((t) => t.id === row.dataset.editRow));
+  $$('[data-edit-row]', root).forEach((row) => {
+    row.onclick = (e) => { if (!e.target.closest('.row-actions')) open(row); };
+    row.onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === row) { e.preventDefault(); open(row); } };
+  });
   $$('[data-edit-tx]', root).forEach((b) => b.onclick = () => txForm(state.transactions.find((t) => t.id === b.dataset.editTx)));
   $$('[data-del-tx]', root).forEach((b) => b.onclick = () => deleteTx(b.dataset.delTx));
 }

@@ -738,6 +738,23 @@ describe('transactions dated after today', () => {
   });
 });
 
+describe('tap a transaction to edit it', () => {
+  test('tapping the row (or Enter on it) opens the edit window, and Delete there removes it', (t) => {
+    const { L, S, doc, add, expenseCat, close } = makeApp(); t.after(close);
+    add({ type: 'expense', amount: 450, date: '2026-10-07', categoryId: expenseCat('Food').id, note: 'Lunch' });
+    L.ui.view = 'transactions'; L.render();
+    const row = doc.querySelector('[data-edit-row]');
+    row.querySelector('.t2').click();                          // anywhere on the row
+    assert.match(doc.querySelector('#overlay h2').textContent, /Edit/);
+    assert.equal(doc.querySelector('#fAmount').value, '450');
+    doc.querySelector('[data-close]').click();
+    doc.querySelector('[data-edit-row]').onkeydown({ key: 'Enter', target: doc.querySelector('[data-edit-row]'), preventDefault() {} });
+    assert.ok(doc.querySelector('#overlay'));
+    doc.querySelector('#fDel').click();
+    assert.equal(S.transactions.length, 0);
+  });
+});
+
 /* ------------------------------------------------- settings controls */
 describe('settings page controls', () => {
   test('week start and mode are buttons; cents is a switch', (t) => {
