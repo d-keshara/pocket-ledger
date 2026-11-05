@@ -502,7 +502,9 @@ function drawBarChart(groups, { height = 220, width = 640 } = {}) {
   const ticks = [0, .25, .5, .75, 1].map((f) => max * f);
   let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">`;
   for (const t of ticks) { const y = T + ih - (t / max) * ih; s += `<line class="gridline" x1="${L}" x2="${W - R}" y1="${y}" y2="${y}"/><text class="axis" x="${L - 8}" y="${y + 4}" text-anchor="end">${esc(money(t, { compact: true, short: true }))}</text>`; }
-  const every = Math.ceil(groups.length / Math.max(2, Math.floor(iw / 56)));
+  // Label every bar when its label fits (Mon..Sun and Jun..Nov fit on a phone); skip some only when they would touch.
+  const labelW = Math.max(...groups.map((g) => String(g.label).length)) * 6.5 + 6; // about 6.5px a letter at 11px
+  const every = Math.max(1, Math.ceil(labelW / gw));
   groups.forEach((g, i) => {
     const gx = L + i * gw; const totalW = n * bw + (n - 1) * 2; const x0 = gx + (gw - totalW) / 2;
     const tipHtml = `${esc(g.tipTitle || g.label)}<br>${g.values.map((x) => `${esc(x.name)}: <b>${esc(money(x.v))}</b>`).join('<br>')}`;
@@ -849,6 +851,7 @@ function viewDashboard() {
       <div class="stat"><div class="k">Spent in ${MONTH_SHORT[now().getMonth()]}</div><div class="v neg">${moneyHtml(mExp)}</div><div class="d">${money(mExp / Math.max(1, parseISO(t).getDate()), { short: true })} a day on average</div></div>
       <div class="stat"><div class="k">Kept this month</div><div class="v ${saved < 0 ? 'neg' : ''}">${moneyHtml(saved)}</div><div class="d">${mInc ? `<span class="${saved > 0 ? 'pos' : saved < 0 ? 'neg' : ''}">${Math.round(saved / mInc * 100)}% of income</span>` : 'Add income to see your savings rate'}</div></div>
     </div>
+    ${accountStrip()}
     <div class="cols">
       <div class="panel"><h2>Where this week’s money went <small>${money(sum(weekEx, (x) => x.amount))}</small></h2>
         ${weekEx.length ? hbars(categoryRows(weekEx), sum(weekEx, (x) => x.amount)) : empty('chart', 'Nothing spent yet this week', 'Log each expense as it happens. Press N to add one quickly.')}</div>
@@ -861,6 +864,18 @@ function viewDashboard() {
         ${upcoming.length ? `<div class="tx-list">${upcoming.map((r) => `<div class="tx"><div class="glyph" style="background:${cat(r.categoryId)?.color || '#5f6b66'}">${esc(catName(r.categoryId)[0])}</div><div style="min-width:0"><div class="t1">${esc(r.note || catName(r.categoryId))}</div><div class="t2">${fmtDate(r.nextDate)} · ${FREQ[r.frequency]}</div></div><div class="amt ${r.type === 'income' ? 'pos' : ''}">${moneyHtml(r.type === 'income' ? r.amount : -r.amount, { sign: true })}</div><div></div></div>`).join('')}</div>`
         : empty('repeat', 'Nothing scheduled', 'Add salary, rent or subscriptions once and they’ll be logged automatically.', `<button class="btn" data-go="recurring">Schedule a payment</button>`)}</div>
     </div>`;
+}
+
+/* Home page: what is in each account, under "Total balance". Only with 2 or more accounts (with one, it is the total).
+   Desktop: tiles wrap into rows. Phone: one row that scrolls sideways, so many accounts never squeeze or overlap. */
+function accountStrip() {
+  if (state.accounts.length < 2) return '';
+  const tiles = state.accounts.map((a) => { const b = accountBalance(a);
+    return `<button class="acc-tile" data-go="accounts" title="${esc(a.name)}: ${esc(money(b))}">
+      <span class="acc-name"><i class="dot" style="background:${a.color}"></i><span>${esc(a.name)}</span></span>
+      <span class="acc-bal ${b < 0 ? 'neg' : ''}">${moneyHtml(b)}</span></button>`; }).join('');
+  return `<section class="acc-strip" aria-label="Accounts"><h2>Accounts <button class="btn small ghost" data-go="accounts">Manage</button></h2>
+    <div class="acc-list">${tiles}</div></section>`;
 }
 
 function backupCard() {
@@ -1956,7 +1971,7 @@ if (window.__LEDGER_TEST__) {
     get state() { return state; }, set state(v) { state = v; }, ui,
     defaultState, migrate, mergeStates, restoreBox, mergeSummary, render, money, esc, addDays, addMonths, daysBetween, weekStartOf, toISO, parseISO,
     weekInfo, accountBalance, totalBalance, postDueRecurring, nextOccurrence, budgetStatus, filteredTx,
-    periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner, checkPlayUpdate, versionFromCode,
+    periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner, checkPlayUpdate, versionFromCode, drawBarChart,
     calcEval, toolMath, calcPad, settleCalc,
     cloudPanel, accountForm, confirmMerge, syncLine, onCloudChange, renderSoon, backupDue, saveBackup, snoozeBackup, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
   };

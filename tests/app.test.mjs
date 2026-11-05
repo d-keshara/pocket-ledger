@@ -605,6 +605,43 @@ describe('Play Store update card (phone app)', () => {
   });
 });
 
+/* ------------------------------------------- home page accounts strip */
+describe('accounts on the home page', () => {
+  test('each account shows with its balance, and tapping one opens Accounts', (t) => {
+    const { L, S, doc, add, expenseCat, cash, close } = makeApp(); t.after(close);
+    S.accounts.push({ id: 'card', name: 'A very long credit card account name', color: '#4a3aa7', initial: -1200 });
+    add({ type: 'expense', amount: 300, date: '2026-10-07', categoryId: expenseCat('Food').id, accountId: cash.id });
+    L.ui.view = 'dashboard'; L.render();
+    const tiles = doc.querySelectorAll('.acc-strip .acc-tile');
+    assert.equal(tiles.length, S.accounts.length);
+    assert.match(tiles[2].textContent, /A very long credit card account name/);
+    assert.ok(tiles[2].querySelector('.acc-bal.neg'), 'a negative balance is red');
+    tiles[0].click();
+    assert.equal(L.ui.view, 'accounts');
+  });
+
+  test('with only one account there is no strip (the total says it all)', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    S.accounts.splice(1);
+    L.ui.view = 'dashboard'; L.render();
+    assert.equal(doc.querySelector('.acc-strip'), null);
+  });
+});
+
+/* ------------------------------------------------ chart day labels */
+describe('bar chart labels', () => {
+  test('on a phone-width chart every weekday and month has its label', (t) => {
+    const { L, close } = makeApp(); t.after(close);
+    const groups = (labels) => labels.map((label) => ({ label, values: [{ v: 1, cls: 'x', name: 'x' }] }));
+    const labels = (svg) => [...svg.matchAll(/<text class="axis"[^>]*text-anchor="middle">([^<]+)</g)].map((m) => m[1]).join(',');
+    assert.equal(labels(L.drawBarChart(groups(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']), { width: 330 })), 'Mon,Tue,Wed,Thu,Fri,Sat,Sun');
+    assert.equal(labels(L.drawBarChart(groups(['Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov']), { width: 330 })), 'Jun,Jul,Aug,Sep,Oct,Nov');
+    // 31 days on a phone still skips some, so the numbers never run into each other
+    const many = labels(L.drawBarChart(groups(Array.from({ length: 31 }, (_, i) => String(i + 1))), { width: 330 })).split(',');
+    assert.ok(many.length < 31 && many.length > 8, many.join());
+  });
+});
+
 /* --------------------------------------------------- backup reminder */
 describe('backup reminder', () => {
   // Adds `count` small expenses, the oldest one `oldestDaysAgo` days before today (7 Oct).
