@@ -727,6 +727,9 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
     box-shadow: 0 6px 20px rgba(0, 0, 0, .25); z-index: 42;
   }
   .fab svg { width: 26px; height: 26px; transition: transform .2s; }
+  /* Slides away while scrolling down so it doesn't cover amounts; back on scrolling up (see app.js). */
+  .fab { transition: transform .2s, opacity .2s; }
+  .fab-wrap.fab-hide .fab { transform: translateY(24px) scale(.6); opacity: 0; pointer-events: none; }
   .fab-wrap.open .fab svg { transform: rotate(45deg); }   /* + turns into × */
 
   /* The actions that fan out of the + (positions --x/--y are worked out in app.js) */
@@ -775,11 +778,9 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
   .summary-bar > span:last-child { justify-content: flex-end; }
   .stat .v { font-size: 22px; font-size: clamp(19px, 18cqi, 26px); }
   .acc-strip { margin-top: 10px; padding: 12px 14px 14px; }
-  /* One sideways-scrolling row: 2 accounts fill the width, more scroll (the next one peeks in). */
-  .acc-list { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(140px, calc(50% - 5px));
-    overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; margin: 0 -14px; padding: 0 14px; scroll-padding: 0 14px; }
-  .acc-list::-webkit-scrollbar { display: none; }
-  .acc-tile { scroll-snap-align: start; }
+  /* Two columns; a 3rd, 4th... account goes on the next row, so all can be read without scrolling sideways. */
+  .acc-list { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .acc-tile { padding: 9px 12px; }
   .acc-bal { font-size: 17px; }
   .home-head .head-title { flex-basis: 0; }            /* share the first row with the switch... */
   .home-head .head-tools { align-self: flex-start; }    /* ...which sits top-right, beside the greeting */
@@ -787,7 +788,11 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
   .cloud-btn span { display: none; }
   /* Toasts sit above the + button instead of covering (and blocking taps on) the tab bar */
   .toast-wrap { bottom: calc(var(--bar-gap) + 146px); width: max-content; max-width: calc(100% - 32px); }
-  .hbar { grid-template-columns: 96px 1fr 80px; }
+  /* Name and amount on one line, the bar full width under them: long names ("Entertainment") are no longer cut. */
+  .hbar { grid-template-columns: 1fr auto; grid-template-areas: "lbl v" "track track"; gap: 4px 10px; }
+  .hbar .lbl { grid-area: lbl; }
+  .hbar .v { grid-area: v; }
+  .hbar .track { grid-area: track; height: 10px; }
   .filters .input { flex: 1 1 45%; min-width: 0; }
   .panel { overflow-x: auto; }          /* wide tables scroll inside their box, not the page */
 

@@ -628,6 +628,24 @@ describe('accounts on the home page', () => {
   });
 });
 
+/* --------------------------------------------- round + while scrolling */
+describe('round + button while scrolling (phones)', () => {
+  test('hides on scrolling down, comes back on scrolling up and near the top, stays while its menu is open', (t) => {
+    const { L, doc, close } = makeApp(); t.after(close);
+    L.ui.view = 'dashboard'; L.render();
+    const main = doc.querySelector('.main'), wrap = () => doc.querySelector('#fabWrap');
+    const scrollTo = (y) => { main.scrollTop = y; L.fabOnScroll({ get scrollTop() { return y; } }); };
+    scrollTo(0); scrollTo(300);
+    assert.ok(wrap().classList.contains('fab-hide'), 'hidden after scrolling down');
+    scrollTo(200);
+    assert.ok(!wrap().classList.contains('fab-hide'), 'back after scrolling up');
+    scrollTo(500); scrollTo(20);
+    assert.ok(!wrap().classList.contains('fab-hide'), 'back near the top');
+    wrap().classList.add('open'); scrollTo(400);
+    assert.ok(!wrap().classList.contains('fab-hide'), 'not hidden while the quick actions are open');
+  });
+});
+
 /* ------------------------------------------------ chart day labels */
 describe('bar chart labels', () => {
   test('on a phone-width chart every weekday and month has its label', (t) => {

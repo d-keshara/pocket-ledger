@@ -285,6 +285,16 @@ document.addEventListener('click', (e) => {
   tipTimer = setTimeout(hideTip, TIP_TOUCH_MS);
 });
 document.addEventListener('scroll', hideTip, true); // `true` also catches scrolling inside .main
+/* Phones: the round + slides away while scrolling down (so it doesn't cover amounts) and comes back on scrolling up
+   or near the top. Small moves (under 6px) are ignored so it doesn't flicker. */
+let lastMainScroll = 0;
+function fabOnScroll(main) {
+  const y = main.scrollTop, w = $('#fabWrap');
+  if (Math.abs(y - lastMainScroll) < 6 && y > 40) return;
+  if (w && !w.classList.contains('open')) w.classList.toggle('fab-hide', y > 40 && y > lastMainScroll);
+  lastMainScroll = y;
+}
+document.addEventListener('scroll', (e) => { if (e.target.classList?.contains('main')) fabOnScroll(e.target); }, true);
 
 /* ================= toast ================= */
 function toast(msg, action) {
@@ -1971,7 +1981,7 @@ if (window.__LEDGER_TEST__) {
     get state() { return state; }, set state(v) { state = v; }, ui,
     defaultState, migrate, mergeStates, restoreBox, mergeSummary, render, money, esc, addDays, addMonths, daysBetween, weekStartOf, toISO, parseISO,
     weekInfo, accountBalance, totalBalance, postDueRecurring, nextOccurrence, budgetStatus, filteredTx,
-    periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner, checkPlayUpdate, versionFromCode, drawBarChart,
+    periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner, checkPlayUpdate, versionFromCode, drawBarChart, fabOnScroll,
     calcEval, toolMath, calcPad, settleCalc,
     cloudPanel, accountForm, confirmMerge, syncLine, onCloudChange, renderSoon, backupDue, saveBackup, snoozeBackup, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
   };
