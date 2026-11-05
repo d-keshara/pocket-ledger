@@ -9,6 +9,10 @@
     "SystemBars": {
       "initialViewportFitValueHint": "cover",
       "style": "DARK"
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_ledger",
+      "iconColor": "#0f6b5c"
     }
   }
 }

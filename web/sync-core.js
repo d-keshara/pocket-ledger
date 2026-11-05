@@ -10,7 +10,7 @@
   // The lists of records that sync. Each record has an id.
   const LISTS = ['accounts', 'categories', 'transactions', 'budgets', 'goals', 'recurring'];
   // Settings that belong to one device only: the backup reminder, the light/dark choice and the colour theme.
-  const LOCAL_SETTINGS = ['lastBackup', 'backupSnoozeUntil', 'theme', 'palette'];
+  const LOCAL_SETTINGS = ['lastBackup', 'backupSnoozeUntil', 'theme', 'palette', 'notify']; // notify: each phone has its own reminders
 
   /* JSON with keys in a fixed order, so {a,b} and {b,a} give the same text and don't look "changed". */
   function stable(v) {

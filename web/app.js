@@ -3,7 +3,7 @@
 'use strict';
 
 /* ================= constants ================= */
-const APP_VERSION = '1.9.2';
+const APP_VERSION = '1.9.3';
 const AUTHOR = 'D. Kezara';
 const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948', '#5f6b66', '#0f6b5c'];
 const CURRENCIES = [
@@ -107,6 +107,7 @@ function save() {
       else localStorage.setItem('pocket-ledger', JSON.stringify(state));
     } catch (e) { toast('Could not save your data: ' + e); }
     try { cloud()?.changed(); } catch (e) { console.error('Sync', e); } // signed in: send the change to the cloud
+    scheduleNotifications();
   }, 150);
 }
 async function loadState() {
@@ -127,7 +128,9 @@ function defaultState() {
   return {
     version: 1,
     settings: { name: '', currency: 'LKR', symbol: 'Rs', decimals: true, weekStart: 1, weeklyBudget: 0, theme: 'system', onboarded: false,
-      lastBackup: '', backupSnoozeUntil: '' },
+      lastBackup: '', backupSnoozeUntil: '',
+      // Phone notifications (Android app only). Kept on this device, not synced: each phone has its own.
+      notify: { daily: false, dailyTime: '20:00', bills: false, limit: false, summary: false, limitWarnAt: '' } },
     accounts: [
       { id: uid(), name: 'Cash', initial: 0, color: PALETTE[2] },
       { id: uid(), name: 'Bank account', initial: 0, color: PALETTE[0] },
@@ -1325,6 +1328,7 @@ function viewSettings() {
         <p class="hint shortcuts-hint" style="margin:0">Shortcuts: N new expense · I new income · Esc close</p>
       </div></div>
     </div>
+    ${notifyPanel()}
     ${cloudPanel()}
     <div class="cols">
       <div class="panel"><h2>Expense categories <button class="btn small" data-cat-add="expense">${icon('plus')}Add</button></h2>${catList('expense')}</div>
@@ -1793,6 +1797,7 @@ function bindSettings(root) {
   $('#sTheme', root).onchange = (e) => { s.theme = e.target.value; save(); render(); };
   $$('[data-pal]', root).forEach((b) => b.onclick = () => { s.palette = b.dataset.pal; save(); render(); });
   $('#sDec', root).onchange = (e) => { s.decimals = e.target.checked; save(); render(); };
+  bindNotifyPanel(root);
   $('#backup', root).onclick = saveBackup;
   $('#csvAll', root).onclick = () => exportCsv(state.transactions);
   $('#restore', root).onclick = async () => {
@@ -1824,6 +1829,113 @@ function bindSettings(root) {
       state.categories = state.categories.filter((x) => x !== c); save(); render();
     });
   });
+}
+
+/* ================= phone notifications (Android app) ================= */
+/* The phone itself shows these at the planned time, even with the app closed: no server, nothing leaves the phone.
+   Every time the app saves (or opens), the next 7 days are planned again from the latest data, so the
+   messages stay true: add something today and tonight's reminder is dropped. */
+const NOTIFY_DAILY = [
+  ['Quick check-in 👋', 'Added today’s spending?'],
+  ['Before the day ends', 'Log today’s spending while you remember.'],
+  ['Your ledger is waiting 📒', 'Any spending today? Add it now.'],
+  ['10-second habit', 'Add today’s spending to stay on track.'],
+];
+const NOTIFY_MORNING = '09:00', NOTIFY_SUMMARY = '19:00';
+const notifySettings = () => ({ ...defaultState().settings.notify, ...state.settings.notify });
+/* A Date for a day ("2026-11-05") at a time ("20:00"), in the phone's own time zone. */
+function notifyAt(iso, hhmm) { const d = parseISO(iso); const [h, m] = hhmm.split(':').map(Number); d.setHours(h, m, 0, 0); return d; }
+/* What to show and when, for the next 7 days. Pure: reads the data, changes nothing, so the tests can check it.
+   Ids: 1xx daily reminder, 2xx payments, 300 weekly limit, 400 weekly summary. */
+function planNotifications(nowMs = now().getTime()) {
+  const n = notifySettings(), t = today(), out = [];
+  const add = (id, at, title, body) => { if (at.getTime() > nowMs + 60000) out.push({ id, at, title, body }); };
+  if (n.daily) {
+    const loggedToday = state.transactions.some((x) => x.date === t);
+    for (let i = loggedToday ? 1 : 0; i < 7; i++) {
+      const d = addDays(t, i); const [title, body] = NOTIFY_DAILY[parseISO(d).getDate() % NOTIFY_DAILY.length];
+      add(100 + i, notifyAt(d, n.dailyTime || '20:00'), title, body);
+    }
+  }
+  if (n.bills) {
+    let k = 0;
+    for (const r of state.recurring.filter((x) => x.active)) {
+      for (let due = r.nextDate, guard = 0; due && due <= addDays(t, 8) && guard < 10; due = nextOccurrence(r, due), guard++) {
+        const what = r.note || catName(r.categoryId), amt = money(r.amount);
+        add(200 + k++, notifyAt(addDays(due, -1), NOTIFY_MORNING), r.type === 'income' ? 'Coming in tomorrow 💰' : 'Due tomorrow 🗓️', `${what}: ${amt}`);
+      }
+    }
+  }
+  const w = weekInfo(t);
+  if (n.limit && w.B && w.spent >= w.B * 0.8) {
+    // Once a week: tomorrow morning, unless this week's warning has already been shown.
+    const tomorrow = addDays(t, 1); const shown = n.limitWarnAt && n.limitWarnAt >= w.start && n.limitWarnAt <= t;
+    if (tomorrow <= w.end && !shown) {
+      add(300, notifyAt(tomorrow, NOTIFY_MORNING), w.remaining > 0 ? 'Weekly limit almost used ⚠️' : 'Over your weekly limit',
+        w.remaining > 0 ? `${money(w.remaining, { short: true })} left this week.` : `${money(-w.remaining, { short: true })} over this week.`);
+    }
+  }
+  if (n.summary) {
+    const vs = w.B ? (w.remaining >= 0 ? `, ${money(w.remaining, { short: true })} under limit 🎉` : `, ${money(-w.remaining, { short: true })} over limit`) : '';
+    add(400, notifyAt(w.end, NOTIFY_SUMMARY), 'Your week', `Spent ${money(w.spent, { short: true })}${vs}`);
+  }
+  return out;
+}
+/* Replaces the planned notifications with a fresh plan. Waits a moment so a burst of saves plans only once. */
+let notifyTimer;
+function scheduleNotifications() {
+  const LN = window.Capacitor?.Plugins?.LocalNotifications;
+  if (!isNativeApp() || !LN) return;
+  clearTimeout(notifyTimer);
+  notifyTimer = setTimeout(async () => {
+    try {
+      const plan = planNotifications();
+      const warn = plan.find((x) => x.id === 300);
+      // Remember the day the limit warning shows, so it comes once a week (saved with the next change).
+      // Planned but no longer needed (an expense was deleted): forget it, so it can still come later this week.
+      if (warn) state.settings.notify = { ...notifySettings(), limitWarnAt: toISO(warn.at) };
+      else if (notifySettings().limitWarnAt > today()) state.settings.notify = { ...notifySettings(), limitWarnAt: '' };
+      const { notifications: pending = [] } = await LN.getPending();
+      if (pending.length) await LN.cancel({ notifications: pending.map((x) => ({ id: x.id })) });
+      if (plan.length) await LN.schedule({ notifications: plan.map((x) => ({ id: x.id, title: x.title, body: x.body, schedule: { at: x.at, allowWhileIdle: true } })) });
+    } catch (e) { console.error('Notifications', e); }
+  }, 1000);
+}
+/* Turning a switch on: Android asks once for permission. Returns false if the person said no. */
+async function allowNotifications() {
+  const LN = window.Capacitor?.Plugins?.LocalNotifications; if (!LN) return false;
+  try {
+    let p = await LN.checkPermissions();
+    if (p.display !== 'granted') p = await LN.requestPermissions();
+    return p.display === 'granted';
+  } catch { return false; }
+}
+function notifyPanel() {
+  if (!isNativeApp()) return '';
+  const n = notifySettings();
+  const row = (key, title, hint, extra = '') => `<div class="notify-row"><label><input type="checkbox" data-notify="${key}" ${n[key] ? 'checked' : ''}>
+    <span><b>${title}</b><span class="hint">${hint}</span></span></label>${extra}</div>`;
+  return `<div class="panel" style="margin-top:18px"><h2>Notifications</h2><div class="stack">
+    ${row('daily', 'Daily reminder', 'A nudge to add the day’s spending. Skipped on days you already added something.',
+      `<input class="input notify-time" type="time" id="notifyTime" value="${esc(n.dailyTime)}" aria-label="Reminder time" ${n.daily ? '' : 'disabled'}>`)}
+    ${row('bills', 'Payment due tomorrow', 'The day before a scheduled payment or income, at 9:00.')}
+    ${row('limit', 'Weekly limit warning', 'Once a week, the morning after you pass 80% of your weekly limit.')}
+    ${row('summary', 'Weekly summary', 'On the last evening of your week: what you spent and how it went.')}
+    <p class="hint" style="margin:0">Your phone shows these itself. Nothing is sent anywhere.</p>
+  </div></div>`;
+}
+function bindNotifyPanel(root) {
+  $$('[data-notify]', root).forEach((box) => box.onchange = async () => {
+    if (box.checked && !(await allowNotifications())) {
+      box.checked = false;
+      return toast('Notifications are off for Pocket Ledger. Turn them on in your phone’s Settings → Apps.');
+    }
+    state.settings.notify = { ...notifySettings(), [box.dataset.notify]: box.checked };
+    if (box.dataset.notify === 'daily') $('#notifyTime', root).disabled = !box.checked;
+    save();
+  });
+  const time = $('#notifyTime', root);
+  if (time) time.onchange = () => { if (time.value) { state.settings.notify = { ...notifySettings(), dailyTime: time.value }; save(); } };
 }
 
 /* ================= app updates ================= */
@@ -1958,6 +2070,9 @@ async function boot() {
   render();
   hideSplash();
   checkPlayUpdate();
+  scheduleNotifications();
+  // Back in the app after a while (a new day, maybe): plan the reminders again from today.
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleNotifications(); });
   // Sync is optional: if anything in it fails, the app carries on without it.
   try {
     cloud()?.onChange(onCloudChange); // the home page button and Settings show the account
@@ -1983,7 +2098,7 @@ if (window.__LEDGER_TEST__) {
     get state() { return state; }, set state(v) { state = v; }, ui,
     defaultState, migrate, mergeStates, restoreBox, mergeSummary, render, money, esc, addDays, addMonths, daysBetween, weekStartOf, toISO, parseISO,
     weekInfo, accountBalance, totalBalance, postDueRecurring, nextOccurrence, budgetStatus, filteredTx,
-    periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner, checkPlayUpdate, versionFromCode, drawBarChart, fabOnScroll,
+    periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner, checkPlayUpdate, versionFromCode, drawBarChart, fabOnScroll, planNotifications, notifyPanel,
     calcEval, toolMath, calcPad, settleCalc,
     cloudPanel, accountForm, confirmMerge, syncLine, onCloudChange, renderSoon, backupDue, saveBackup, snoozeBackup, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
   };

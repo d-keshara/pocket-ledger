@@ -59,7 +59,14 @@ Designed and developed by D. Kezara.
 - Web version: https://d-keshara.github.io/pocket-ledger/
 - Delete account (Play Console > App content > Data safety > "Delete account URL"): https://d-keshara.github.io/pocket-ledger/account.html?mode=deleteAccount
 
-## What's new in 1.9.2 (release notes, max 500)
+## What's new in 1.9.3 (release notes, max 500)
+New: reminders. Turn on a daily reminder, payment-due alerts, a weekly limit warning and a weekly summary in Settings.
+New: your accounts on the home page.
+New: update alert when a new version is ready.
+Fixed: the weekly chart no longer marks a past day red the next day; expenses dated later this week show as planned.
+Fixed: chart labels on phones, long category names, text getting selected on long press.
+
+## What's new in 1.9.2, kept for reference (release notes, max 500)
 Fixed: on the This Week chart, the dashed daily-limit lines for today and the coming days now stay inside the chart instead of going off the top.
 
 ## What's new in 1.9.1, kept for reference (release notes, max 500)

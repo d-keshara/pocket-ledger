@@ -460,6 +460,12 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
 .stat .k { color: var(--ink-2); font-size: 13px; }
 .stat .v { font-family: var(--num); font-size: 30px; font-size: clamp(19px, 18cqi, 30px); font-weight: 600; line-height: 1.25; margin: 2px 0 1px; } /* cqi = % of the card width, so big numbers always fit */
 .stat .d { font-size: 12.5px; color: var(--muted); }
+.notify-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.notify-row label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.notify-row input[type="checkbox"] { margin-top: 3px; flex: none; }
+.notify-row label > span { display: flex; flex-direction: column; }
+.notify-row .hint { margin: 0; font-size: 12.5px; }
+.notify-time { width: auto; flex: none; }
 /* Home page accounts strip (under the number cards). Tiles wrap on wide screens; on phones they scroll sideways. */
 .acc-strip { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px 16px; margin-top: 18px; }
 .acc-strip h2 { font-size: 15px; margin: 0 0 10px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; gap: 10px; }

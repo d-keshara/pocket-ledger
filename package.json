@@ -1,6 +1,6 @@
 {
   "name": "pocket-ledger",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "private": true,
   "description": "Pocket Ledger: personal money tracker (Windows, web, phone)",
   "author": "D. Kezara",
@@ -20,6 +20,7 @@
     "@capacitor/android": "^8.5.3",
     "@capacitor/core": "^8.5.3",
     "@capacitor/filesystem": "^8.1.4",
+    "@capacitor/local-notifications": "^8.3.1",
     "@capacitor/share": "^8.0.3",
     "@capawesome/capacitor-app-update": "^8.1.1"
   }

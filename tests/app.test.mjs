@@ -628,6 +628,84 @@ describe('accounts on the home page', () => {
   });
 });
 
+/* ------------------------------------------------ phone notifications */
+describe('phone notifications (Android app)', () => {
+  // Today in the tests is Wednesday 7 Oct 2026, 10:00. The week is Mon 5 - Sun 11 Oct.
+  const on = (S, o) => { S.settings.notify = { ...S.settings.notify, ...o }; };
+  const when = (x) => `${x.at.getFullYear()}-${String(x.at.getMonth() + 1).padStart(2, '0')}-${String(x.at.getDate()).padStart(2, '0')} ${String(x.at.getHours()).padStart(2, '0')}:${String(x.at.getMinutes()).padStart(2, '0')}`;
+
+  test('all off by default: nothing is planned', (t) => {
+    const { L, close } = makeApp(); t.after(close);
+    assert.equal(L.planNotifications().length, 0);
+  });
+
+  test('daily reminder: 7 evenings at the chosen time, but not tonight if something was added today', (t) => {
+    const { L, S, add, expenseCat, close } = makeApp(); t.after(close);
+    on(S, { daily: true, dailyTime: '21:30' });
+    let plan = L.planNotifications();
+    assert.equal(plan.length, 7);
+    assert.equal(when(plan[0]), '2026-10-07 21:30');
+    add({ type: 'expense', amount: 200, date: '2026-10-07', categoryId: expenseCat('Food').id });
+    plan = L.planNotifications();
+    assert.equal(plan.length, 6);
+    assert.equal(when(plan[0]), '2026-10-08 21:30');
+  });
+
+  test('payment due tomorrow: the morning before each scheduled payment in the next week', (t) => {
+    const { L, S, cash, expenseCat, close } = makeApp(); t.after(close);
+    on(S, { bills: true });
+    S.recurring.push({ id: 'r1', type: 'expense', amount: 18000, note: 'Rent', categoryId: expenseCat('Rent').id,
+      frequency: 'monthly', nextDate: '2026-10-10', anchorDay: 10, accountId: cash.id, active: true });
+    S.recurring.push({ id: 'r2', type: 'expense', amount: 500, note: 'Paused gym', categoryId: expenseCat('Health').id,
+      frequency: 'monthly', nextDate: '2026-10-09', anchorDay: 9, accountId: cash.id, active: false });
+    const plan = L.planNotifications();
+    assert.equal(plan.length, 1);
+    assert.equal(when(plan[0]), '2026-10-09 09:00');
+    assert.equal(plan[0].title, 'Due tomorrow 🗓️');
+    assert.match(plan[0].body, /^Rent: Rs\s?18,000\.00$/);
+  });
+
+  test('weekly limit warning: the morning after passing 80%, once a week', (t) => {
+    const { L, S, add, expenseCat, close } = makeApp(); t.after(close);
+    on(S, { limit: true });
+    S.settings.weeklyBudget = 7000;
+    add({ type: 'expense', amount: 5000, date: '2026-10-06', categoryId: expenseCat('Food').id });
+    assert.equal(L.planNotifications().length, 0); // 71%: not yet
+    add({ type: 'expense', amount: 1000, date: '2026-10-07', categoryId: expenseCat('Food').id });
+    const plan = L.planNotifications();
+    assert.equal(when(plan[0]), '2026-10-08 09:00');
+    assert.match(plan[0].body, /^Rs\s?1,000 left this week\.$/);
+    on(S, { limitWarnAt: '2026-10-07' }); // already shown this week
+    assert.equal(L.planNotifications().length, 0);
+  });
+
+  test('weekly summary: the last evening of the week', (t) => {
+    const { L, S, add, expenseCat, close } = makeApp(); t.after(close);
+    on(S, { summary: true });
+    S.settings.weeklyBudget = 7000;
+    add({ type: 'expense', amount: 2500, date: '2026-10-06', categoryId: expenseCat('Food').id });
+    const [x] = L.planNotifications();
+    assert.equal(when(x), '2026-10-11 19:00');
+    assert.match(x.body, /^Spent Rs\s?2,500, Rs\s?4,500 under limit/);
+  });
+
+  test('the Notifications section is only in the phone app; a refused permission leaves the switch off', async (t) => {
+    const { w, L, S, doc, close } = makeApp(); t.after(close);
+    L.ui.view = 'settings'; L.render();
+    assert.ok(!/Notifications/.test(doc.querySelector('#root').textContent), 'not on the web');
+    w.Capacitor = { isNativePlatform: () => true, Plugins: { LocalNotifications: {
+      checkPermissions: async () => ({ display: 'prompt' }), requestPermissions: async () => ({ display: 'denied' }),
+    } } };
+    L.render();
+    const box = doc.querySelector('[data-notify="daily"]');
+    assert.ok(box, 'shown in the phone app');
+    box.checked = true; box.onchange();
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(box.checked, false);
+    assert.equal(S.settings.notify.daily, false);
+  });
+});
+
 /* --------------------------------------------- round + while scrolling */
 describe('round + button while scrolling (phones)', () => {
   test('hides on scrolling down, comes back on scrolling up and near the top, stays while its menu is open', (t) => {
