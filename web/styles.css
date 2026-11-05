@@ -255,7 +255,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
 /* ---------- shell ---------- */
-.app { display: grid; grid-template-columns: 224px 1fr; height: 100vh; height: 100dvh; } /* dvh = visible height on phones */
+/* One row that takes the full height. Without it, the hidden phone + button got its own row, and on short pages
+   the leftover height was shared with that row, so the sidebar stopped short of the bottom. */
+.app { display: grid; grid-template-columns: 224px 1fr; grid-template-rows: minmax(0, 1fr); height: 100vh; height: 100dvh; } /* dvh = visible height on phones */
 .side {
   background: var(--side); color: var(--side-ink);
   display: flex; flex-direction: column; padding: 22px 14px 16px;
