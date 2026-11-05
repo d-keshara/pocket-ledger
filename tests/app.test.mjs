@@ -1725,6 +1725,23 @@ describe('calculator', () => {
     assert.ok(sv.perWeek * sv.weeks >= 60000);
   });
 
+  test('loan: flat rate charges interest on the full amount for the whole time', (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    const flat = L.toolMath.loan(1500000, 12, 60, 'flat');   // 1.5M x 12% x 5 years = 900,000 interest
+    assert.equal(flat.interest, 900000);
+    assert.equal(flat.total, 2400000);
+    assert.equal(flat.monthly, 40000);
+    assert.ok(flat.monthly > L.toolMath.loan(1500000, 12, 60).monthly, 'flat costs more than reducing balance');
+    L.ui.view = 'tools'; L.render();
+    const set = (f, v) => { const i = doc.querySelector(`[data-tool="loan"][data-f="${f}"]`); i.value = v; i.dispatchEvent(new w.Event('input', { bubbles: true })); };
+    set('amount', '1500000'); set('rate', '12'); set('months', '60');
+    assert.match(doc.querySelector('#out-loan').textContent, /flat rate \(leasing quote\): Rs\s?40,000\.00 a month/);
+    doc.querySelector('[data-loan-kind="flat"]').click();
+    assert.equal(doc.querySelector('[data-loan-kind="flat"]').getAttribute('aria-checked'), 'true');
+    assert.match(doc.querySelector('#out-loan .tool-row.strong').textContent, /Rs\s?40,000\.00/);
+    assert.match(doc.querySelector('#out-loan').textContent, /reducing balance \(bank loan\)/);
+  });
+
   test('a discount over 100% or a negative tip is refused, not shown as a negative amount', (t) => {
     const { L, w, doc, close } = makeApp(); t.after(close);
     L.ui.view = 'tools'; L.render();

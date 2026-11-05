@@ -770,9 +770,13 @@ const toolMath = {
     const cents = Math.round(all * 100); const each = Math.floor(cents / people) / 100; const extra = cents % people;
     return { all, each, extra, last: round2(each + extra / 100) };
   },
-  // Monthly payment of a loan or lease: amount × r / (1 − (1 + r)^−months), r = yearly rate ÷ 12.
-  loan: (amount, yearRate, months) => {
-    const r = yearRate / 1200; const monthly = round2(r ? amount * r / (1 - Math.pow(1 + r, -months)) : amount / months);
+  // Monthly payment of a loan or lease.
+  //   Reducing balance (banks): amount × r / (1 − (1 + r)^−months), r = yearly rate ÷ 12; interest only on what is still owed.
+  //   Flat rate (many leasing companies): interest on the full amount for the whole time, amount × rate × years.
+  loan: (amount, yearRate, months, kind = 'reducing') => {
+    const r = yearRate / 1200;
+    const monthly = round2(kind === 'flat' ? (amount + amount * yearRate / 100 * months / 12) / months
+      : r ? amount * r / (1 - Math.pow(1 + r, -months)) : amount / months);
     // Totals from the rounded monthly payment, so "each month x months" matches "you pay back".
     const total = round2(monthly * months);
     return { monthly, total, interest: round2(total - amount) };
@@ -812,8 +816,12 @@ function toolResult(tool) {
   if (tool === 'loan') {
     const months = Math.round(n('months') || 0);
     if (!(n('amount') > 0) || n('rate') === null || n('rate') < 0 || months < 1) return wait('Enter the amount, the yearly interest and the number of months.');
-    const r = toolMath.loan(n('amount'), n('rate'), months);
-    return row('Each month', r.monthly, true) + row('Interest in total', r.interest) + row('You pay back', r.total);
+    const flat = v.kind === 'flat';
+    const r = toolMath.loan(n('amount'), n('rate'), months, flat ? 'flat' : 'reducing');
+    // The other way of charging interest, for comparing a lease quote with a bank loan.
+    const other = toolMath.loan(n('amount'), n('rate'), months, flat ? 'reducing' : 'flat');
+    return row('Each month', r.monthly, true) + row('Interest in total', r.interest) + row('You pay back', r.total)
+      + (n('rate') > 0 ? `<p class="hint">At ${esc(String(n('rate')))}% ${flat ? 'reducing balance (bank loan)' : 'flat rate (leasing quote)'}: ${esc(money(other.monthly))} a month.</p>` : '');
   }
   if (tool === 'saving') {
     if (!(n('target') > 0) || !v.date) return wait('Enter what you need and by when.');
@@ -829,7 +837,10 @@ function toolResult(tool) {
 function viewTools() {
   const sym = esc(state.settings.symbol);
   const isMoney = new Set(['price', 'total', 'amount', 'target', 'saved']);
-  const cards = TOOLS.map(([tool, title, fields]) => `<div class="panel tool"><h2>${title}</h2><div class="tool-fields">${fields.map(([k, label, ph]) => {
+  const kind = ui.tools.loan?.kind === 'flat' ? 'flat' : 'reducing';
+  const loanKind = `<div class="field"><span>Interest type</span><div class="seg tool-kind" role="radiogroup" aria-label="Interest type">${[['reducing', 'Reducing balance'], ['flat', 'Flat rate']].map(([k, l]) => `<button type="button" role="radio" aria-checked="${kind === k}" class="${kind === k ? 'on' : ''}" data-loan-kind="${k}">${l}</button>`).join('')}</div>
+    <span class="hint">${kind === 'flat' ? 'Interest on the full amount for the whole time. Many leasing companies quote this way.' : 'Interest only on what you still owe. Banks usually work this way.'}</span></div>`;
+  const cards = TOOLS.map(([tool, title, fields]) => `<div class="panel tool"><h2>${title}</h2><div class="tool-fields">${tool === 'loan' ? loanKind : ''}${fields.map(([k, label, ph]) => {
     const value = esc(ui.tools[tool]?.[k] ?? '');
     return `<label class="field"><span>${label}${isMoney.has(k) ? ` (${sym})` : ''}</span>${k === 'date'
       ? `<input class="input" type="date" data-tool="${tool}" data-f="${k}" min="${addDays(today(), 1)}" value="${value}">`
@@ -841,6 +852,7 @@ function viewTools() {
 }
 function bindTools(root) {
   $('#openPad', root).onclick = () => calcPad();
+  $$('[data-loan-kind]', root).forEach((b) => b.onclick = () => { (ui.tools.loan ||= {}).kind = b.dataset.loanKind; render(); });
   const bindOut = (out) => {
     $$('[data-tool-add]', out).forEach((b) => b.onclick = () => txForm({ type: 'expense', amount: +b.dataset.toolAdd }));
     $$('[data-tool-goal]', out).forEach((b) => b.onclick = () => goalForm({ target: +b.dataset.toolGoal, saved: +b.dataset.toolSaved, deadline: b.dataset.toolDate }));
