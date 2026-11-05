@@ -791,7 +791,7 @@ function viewDashboard() {
     const expensesToday = round2(sum(expensesIn(t, t), (x) => x.amount)); // every expense today, also rent and bills
     lead = `<div class="runway-lead"><div class="label">Spent this week</div><div class="big plain">${moneyHtml(w.spent)}</div>
       <div class="today-pair">${incomeMini}${mini('Expenses today', moneyHtml(expensesToday), 'neg')}</div>
-      <button class="link-btn" id="setBudget">Set a weekly limit →</button></div>`;
+      <button class="link-btn" id="setBudget">Set a weekly limit to see what you can spend each day →</button></div>`;
   } else {
     const over = w.leftToday < 0;
     lead = `<div class="runway-lead">
