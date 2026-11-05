@@ -626,18 +626,24 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
 
 .more-credit { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); text-align: center; font-size: 12px; color: var(--muted); }
 
-/* "New version ready" banner: top centre, clear of the tab bar, + button and toasts */
+/* "Update available" card: top centre, clear of the tab bar, + button and toasts.
+   Built from the theme's colours so the text and the Update button stand out in every theme. */
 .update-banner {
   position: fixed; z-index: 110; left: 50%; transform: translateX(-50%);
   top: calc(env(safe-area-inset-top, 0px) + 14px);
-  display: flex; align-items: center; gap: 10px;
-  width: max-content; max-width: calc(100% - 32px);
-  padding: 8px 8px 8px 16px; border-radius: 12px;
-  background: var(--ink); color: var(--bg); font-size: 13.5px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, .25); animation: drop .2s;
+  display: flex; align-items: center; gap: 12px;
+  width: min(440px, calc(100% - 32px));
+  padding: 12px 10px 12px 12px; border-radius: 14px;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .18), 0 2px 6px rgba(0, 0, 0, .08); animation: drop .2s;
 }
-.update-banner .icon-btn { color: inherit; opacity: .7; }
-.update-banner .icon-btn:hover { background: rgba(127, 127, 127, .2); color: inherit; opacity: 1; }
+.update-icon { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.update-icon svg { width: 18px; height: 18px; }
+.update-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; line-height: 1.3; }
+.update-text strong { font-size: 14px; font-weight: 600; }
+.update-text span { font-size: 12.5px; color: var(--muted); }
+.update-banner .btn.primary { flex: none; padding: 7px 14px; }
+.update-banner .icon-btn { flex: none; }
 @keyframes drop { from { opacity: 0; transform: translate(-50%, -10px); } }
 
 /* ================= Phone layout (written by you in Phase 1) ================= */

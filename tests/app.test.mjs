@@ -513,6 +513,55 @@ describe('update banner', () => {
 
     assert.equal(doc.querySelector('.update-banner'), null);  // Assert: it should be gone
   });
+
+  test('the button says "Update" and runs the action it was given', (t) => {
+    const { L, doc, close } = makeApp(); t.after(close);
+    let clicked = 0;
+    L.showUpdateBanner({ text: 'Version 1.9.3 is on Google Play.', onUpdate: () => clicked++ });
+    assert.equal(doc.querySelector('#updNow').textContent, 'Update');
+    assert.match(doc.querySelector('.update-banner').textContent, /Update available/);
+    assert.match(doc.querySelector('.update-banner').textContent, /1\.9\.3 is on Google Play/);
+    doc.querySelector('#updNow').click();
+    assert.equal(clicked, 1);
+  });
+
+  test('Play Store version codes turn back into version names', (t) => {
+    const { L, close } = makeApp(); t.after(close);
+    assert.equal(L.versionFromCode(10903), '1.9.3');
+    assert.equal(L.versionFromCode(21000), '2.10.0');
+  });
+});
+
+/* ------------------------------------------------- Play Store update */
+describe('Play Store update card (phone app)', () => {
+  // A fake phone: Capacitor says "native", and the AppUpdate plugin answers with `info`.
+  const fakePhone = (w, info, opened = []) => {
+    w.Capacitor = { isNativePlatform: () => true, Plugins: { AppUpdate: {
+      getAppUpdateInfo: async () => { if (info instanceof Error) throw info; return info; },
+      openAppStore: async () => { opened.push(true); },
+    } } };
+  };
+
+  test('shows the card with the new version when Play has an update, and Update opens the store', async (t) => {
+    const { w, L, doc, close } = makeApp(); t.after(close);
+    const opened = [];
+    fakePhone(w, { updateAvailability: 2, availableVersionCode: 10903 }, opened);
+    await L.checkPlayUpdate();
+    assert.match(doc.querySelector('.update-banner').textContent, /Version 1\.9\.3 is on Google Play/);
+    doc.querySelector('#updNow').click();
+    assert.equal(opened.length, 1);
+  });
+
+  test('no card when the app is up to date, when Play cannot be reached, or on the web', async (t) => {
+    const { w, L, doc, close } = makeApp(); t.after(close);
+    fakePhone(w, { updateAvailability: 1, availableVersionCode: 10902 }); // 1 = UPDATE_NOT_AVAILABLE
+    await L.checkPlayUpdate();
+    fakePhone(w, new Error('offline'));
+    await L.checkPlayUpdate();
+    delete w.Capacitor; // web version
+    await L.checkPlayUpdate();
+    assert.equal(doc.querySelector('.update-banner'), null);
+  });
 });
 
 /* --------------------------------------------------- backup reminder */

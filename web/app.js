@@ -1786,19 +1786,39 @@ function bindSettings(root) {
 }
 
 /* ================= app updates ================= */
-/* sw.js sends "update-ready" when it has downloaded newer files into the cache.
-   Reloading then shows the new version straight away. */
-function showUpdateBanner() {
+/* Web: sw.js sends "update-ready" when it has downloaded newer files into the cache;
+   reloading then shows the new version straight away.
+   Phone: Google Play says whether a newer version is out (see checkPlayUpdate); "Update" opens the Play Store.
+   The card uses the theme's own colours (surface, ink, accent), so it reads well in every theme, light or dark. */
+function showUpdateBanner({ text = 'A new version of Pocket Ledger is ready.', onUpdate } = {}) {
   if ($('#updateBanner')) return; // several files can change at once; show one banner
   const el = document.createElement('div');
   el.id = 'updateBanner'; el.className = 'update-banner'; el.setAttribute('role', 'status');
-  el.innerHTML = `<span>A new version of Pocket Ledger is ready.</span>
-    <button class="btn small primary" id="updNow">Refresh</button>
+  el.innerHTML = `<span class="update-icon">${icon('download')}</span>
+    <div class="update-text"><strong>Update available</strong><span>${esc(text)}</span></div>
+    <button class="btn small primary" id="updNow">Update</button>
     <button class="icon-btn" id="updLater" aria-label="Not now">${icon('x')}</button>`;
   document.body.appendChild(el);
   // Wait a moment so any change typed just before is saved (save() waits 150ms).
-  $('#updNow').onclick = () => setTimeout(() => location.reload(), 250);
+  $('#updNow').onclick = onUpdate || (() => setTimeout(() => location.reload(), 250));
   $('#updLater').onclick = () => el.remove();
+}
+/* Play Store version codes are made in android/app/build.gradle: 1.9.3 -> 10903. This turns one back into "1.9.3". */
+const versionFromCode = (code) => `${Math.floor(code / 10000)}.${Math.floor(code / 100) % 100}.${code % 100}`;
+/* Phone app only: asks Google Play (through the AppUpdate plugin) if a newer version is out.
+   Any failure (no internet, installed from outside Play) just means no card. */
+async function checkPlayUpdate() {
+  const AppUpdate = window.Capacitor?.Plugins?.AppUpdate;
+  if (!isNativeApp() || !AppUpdate) return;
+  try {
+    const info = await AppUpdate.getAppUpdateInfo();
+    if (info.updateAvailability !== 2) return; // 2 = UPDATE_AVAILABLE
+    const code = +info.availableVersionCode;
+    showUpdateBanner({
+      text: code ? `Version ${versionFromCode(code)} is on Google Play.` : 'A newer version is on Google Play.',
+      onUpdate: () => AppUpdate.openAppStore().catch(() => {}),
+    });
+  } catch { /* no update info: carry on quietly */ }
 }
 if ('serviceWorker' in navigator && !isNativeApp()) {
   // A brand-new install also "changes controller", so only count it if one was running before.
@@ -1896,6 +1916,7 @@ async function boot() {
   postDueRecurring();
   render();
   hideSplash();
+  checkPlayUpdate();
   // Sync is optional: if anything in it fails, the app carries on without it.
   try {
     cloud()?.onChange(onCloudChange); // the home page button and Settings show the account
@@ -1921,7 +1942,7 @@ if (window.__LEDGER_TEST__) {
     get state() { return state; }, set state(v) { state = v; }, ui,
     defaultState, migrate, mergeStates, restoreBox, mergeSummary, render, money, esc, addDays, addMonths, daysBetween, weekStartOf, toISO, parseISO,
     weekInfo, accountBalance, totalBalance, postDueRecurring, nextOccurrence, budgetStatus, filteredTx,
-    periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner,
+    periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner, checkPlayUpdate, versionFromCode,
     calcEval, toolMath, calcPad, settleCalc,
     cloudPanel, accountForm, confirmMerge, syncLine, onCloudChange, renderSoon, backupDue, saveBackup, snoozeBackup, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
   };
