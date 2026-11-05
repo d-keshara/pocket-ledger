@@ -222,8 +222,11 @@ function weekInfo(refIso = today()) {
     const date = addDays(start, i);
     return { date, spent: round2(sum(ex.filter((x) => x.date === date), (x) => x.amount)) };
   });
-  const spent = round2(sum(days, (d) => d.spent));
   const todayIdx = clamp(daysBetween(start, t), 0, 6);
+  // Spent = up to today. Expenses dated later this week (rent on Saturday) are "planned": not spent yet, but kept
+  // aside, so the coming days' shares are what is left on top of them.
+  const spent = round2(sum(days.slice(0, todayIdx + 1), (d) => d.spent));
+  const planned = round2(sum(days.slice(todayIdx + 1), (d) => d.spent));
   const isCurrent = t >= start && t <= end;
   const before = round2(sum(days.slice(0, todayIdx), (d) => d.spent));
   const daysLeft = 7 - todayIdx;
@@ -232,7 +235,7 @@ function weekInfo(refIso = today()) {
   const leftToday = round2(allowanceToday - spentToday);
   const remaining = round2(B - spent);
   // Future days share what is left once today's share is used up.
-  const perDayAfter = daysLeft > 1 ? Math.max(0, remaining - Math.max(0, leftToday)) / (daysLeft - 1) : 0;
+  const perDayAfter = daysLeft > 1 ? Math.max(0, remaining - planned - Math.max(0, leftToday)) / (daysLeft - 1) : 0;
   // Each day's share: up to today, what that day had when it was "today" (what was left of the limit / days left then),
   // so a day never turns red after midnight just because it became a past day. Future days get perDayAfter.
   let spentBefore = 0;
@@ -240,7 +243,7 @@ function weekInfo(refIso = today()) {
     d.share = !B ? 0 : i <= todayIdx ? Math.max(0, B - spentBefore) / (7 - i) : perDayAfter;
     spentBefore = round2(spentBefore + d.spent);
   });
-  return { start, end, days, spent, B, todayIdx, isCurrent, daysLeft, allowanceToday, spentToday, leftToday, remaining, perDayAfter, counted };
+  return { start, end, days, spent, planned, B, todayIdx, isCurrent, daysLeft, allowanceToday, spentToday, leftToday, remaining, perDayAfter, counted };
 }
 
 /* ================= tooltip ================= */
@@ -489,6 +492,12 @@ function roundTopRect(x, y, w, h, r = 4) {
   r = Math.min(r, w / 2, h);
   return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
 }
+/* A round step for a chart scale: 1, 2, 2.5 or 5 times a power of ten, at least v. */
+function niceStep(v) {
+  if (v <= 0) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(v))); const n = v / p;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p;
+}
 function niceMax(v) {
   if (v <= 0) return 1;
   const p = Math.pow(10, Math.floor(Math.log10(v))); const n = v / p;
@@ -508,11 +517,13 @@ let resizeTimer;
 window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(drawCharts, 80); });
 function drawBarChart(groups, { height = 220, width = 640 } = {}) {
   const W = Math.max(240, width), H = height, L = 52, R = 8, T = 10, B = 26;
-  const max = niceMax(Math.max(1, ...groups.flatMap((g) => g.values.map((x) => x.v))));
+  // About 5 round steps up to the biggest bar, so every label is a round number (10k, 20k ...).
+  const top = Math.max(1, ...groups.flatMap((g) => g.values.map((x) => x.v)));
+  const step = niceStep(top / 5); const max = Math.ceil(top / step - 1e-9) * step;
   const iw = W - L - R, ih = H - T - B, gw = iw / Math.max(1, groups.length);
   const n = groups[0]?.values.length || 1;
   const bw = Math.min(28, (gw * 0.72) / n);
-  const ticks = [0, .25, .5, .75, 1].map((f) => max * f);
+  const ticks = Array.from({ length: Math.round(max / step) + 1 }, (_, i) => i * step);
   let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">`;
   for (const t of ticks) { const y = T + ih - (t / max) * ih; s += `<line class="gridline" x1="${L}" x2="${W - R}" y1="${y}" y2="${y}"/><text class="axis" x="${L - 8}" y="${y + 4}" text-anchor="end">${esc(money(t, { compact: true, short: true }))}</text>`; }
   // Label every bar when its label fits (Mon..Sun and Jun..Nov fit on a phone); skip some only when they would touch.
@@ -787,7 +798,8 @@ function greeting() {
 function viewDashboard() {
   const w = weekInfo(); const s = state.settings; const t = today();
   const mFrom = monthStart(t), mTo = monthEnd(t);
-  const mInc = sum(incomeIn(mFrom, mTo), (x) => x.amount), mExp = sum(expensesIn(mFrom, mTo), (x) => x.amount);
+  // Month numbers count up to today: a payment dated later this month hasn't happened yet.
+  const mInc = sum(incomeIn(mFrom, t), (x) => x.amount), mExp = sum(expensesIn(mFrom, t), (x) => x.amount);
   const lastW = weekInfo(addDays(w.start, -7));
   const lastWSamePoint = sum(lastW.days.slice(0, w.todayIdx + 1), (d) => d.spent);
   const elapsed = w.todayIdx + 1;
@@ -808,10 +820,17 @@ function viewDashboard() {
       <div class="today-pair">${incomeMini}${mini('Expenses today', moneyHtml(expensesToday), 'neg')}</div>
       <button class="link-btn" id="setBudget">Set a weekly limit to see what you can spend each day →</button></div>`;
   } else {
-    const over = w.leftToday < 0;
+    // Once the whole week's limit is used up, today's share (Rs 0) says little: show how far over the week is instead.
+    // The big number is always "left to spend today" and stops at Rs 0. Overspending shows as a red badge next to it:
+    // over today's share, or, once the whole week's limit is used up, over the week (with the day it resets).
+    const weekUsedUp = w.remaining <= 0;
+    const left = Math.max(0, w.leftToday);
+    const overBy = weekUsedUp ? -w.remaining : -w.leftToday;
+    const badge = overBy > 0.005 ? `<span class="over-badge">${money(overBy, { short: true })} over ${weekUsedUp ? 'this week' : 'today'}</span>` : '';
     lead = `<div class="runway-lead">
-      <div class="label">${over ? 'Over today’s share by' : 'Left to spend today'}</div>
-      <div class="big ${over ? 'over' : ''}">${moneyHtml(Math.abs(w.leftToday))}</div>
+      <div class="label">Left to spend today</div>
+      <div class="big-row"><div class="big ${left > 0 ? '' : 'zero'}">${moneyHtml(left)}</div>${badge}</div>
+      ${weekUsedUp ? `<div class="reset-note">Your limit resets on ${DAY_LONG[parseISO(addDays(w.end, 1)).getDay()]}</div>` : ''}
       <div class="today-pair">${mini('Spent today', moneyHtml(w.spentToday), 'neg')}${incomeMini}</div>
       <button class="link-btn" id="setBudget">Change weekly limit (${esc(money(w.B, { short: true }))})</button></div>`;
   }
@@ -821,23 +840,29 @@ function viewDashboard() {
   const daysHtml = w.days.map((d, i) => {
     const dt = parseISO(d.date); const future = i > w.todayIdx; const isToday = i === w.todayIdx;
     const allowance = d.share;
-    const h = (d.spent / scaleMax) * 100; const ah = w.B ? Math.min(97, (allowance / scaleMax) * 100) : 0;
+    // Dashed line: none when the share is 0; a tiny share sits a little above the bottom, not on the rounded edge.
+    // Past days with nothing spent get no line either: there is nothing to compare, and their different shares
+    // looked like random dashes. Their share is still written under the day name.
+    const h = (d.spent / scaleMax) * 100; const ah = clamp((allowance / scaleMax) * 100, 5, 97);
+    const hasShare = w.B && allowance > 0.005; const line = hasShare && !(i < w.todayIdx && d.spent === 0);
     const over = w.B && d.spent > allowance + 0.001;
     // A future day can already have expenses dated on it (rent on Saturday): shown as a lighter "planned" bar.
     // Its share is what is left to spend each day on top of those, so the bar is never marked red.
     const planned = future && d.spent > 0;
     const tipTxt = `${fmtDate(d.date, { full: true })}<br>${future
-      ? `${planned ? `Already planned <b>${esc(money(d.spent))}</b><br>` : ''}${w.B ? `Plan up to <b>${esc(money(allowance))}</b>${planned ? ' more' : ''}` : ''}`
+      ? `${planned ? `Already planned <b>${esc(money(d.spent))}</b><br>` : ''}${w.B ? (hasShare ? `Plan up to <b>${esc(money(allowance))}</b>${planned ? ' more' : ''}` : 'Weekly limit used up') : ''}`
       : `Spent <b>${esc(money(d.spent))}</b>${w.B ? `<br>Daily share ${esc(money(allowance))}` : ''}`}`;
     return `<div class="day ${future ? 'future' : ''} ${isToday ? 'today' : ''}" data-tip="${esc(tipTxt)}">
-      <div class="amt">${future && !planned ? (w.B && allowance > 0 ? moneyHtml(allowance, { short: true }) : '&nbsp;') : (d.spent > 0 ? moneyHtml(d.spent, { short: true }) : '&nbsp;')}</div>
-      <div class="col">${future ? (planned ? `<div class="fill planned" style="height:${h}%"></div>` : '') : `<div class="fill ${over ? 'over' : ''}" style="height:${h}%"></div>`}${w.B ? `<div class="allow" style="bottom:${ah}%"></div>` : ''}</div>
-      <div class="dn">${isToday ? 'Today' : DAY_SHORT[dt.getDay()]}</div></div>`;
+      <div class="amt">${d.spent > 0 ? moneyHtml(d.spent, { short: true }) : '&nbsp;'}</div>
+      <div class="col">${future ? (planned ? `<div class="fill planned" style="height:${h}%"></div>` : '') : `<div class="fill ${over ? 'over' : ''}" style="height:${h}%"></div>`}${line ? `<div class="allow" style="bottom:${ah}%"></div>` : ''}</div>
+      <div class="dn">${isToday ? 'Today' : DAY_SHORT[dt.getDay()]}</div>
+      ${w.B ? `<div class="share" title="Daily share">${hasShare ? moneyHtml(allowance, { short: true }) : '–'}</div>` : ''}</div>`;
   }).join('');
   const diff = w.spent - lastWSamePoint;
   const chip = (html, cls = '') => `<span class="chip ${cls}">${html}</span>`;
   const notes = `<div class="runway-note">
-    ${w.B ? chip(w.remaining >= 0 ? `<b>${money(w.remaining, { short: true })}</b> left this week` : `<b>${money(-w.remaining, { short: true })}</b> over this week`, w.remaining >= 0 ? '' : 'neg') : ''}
+    ${w.B && w.remaining > 0 ? chip(w.remaining >= 0 ? `<b>${money(w.remaining, { short: true })}</b> left this week` : `<b>${money(-w.remaining, { short: true })}</b> over this week`, w.remaining >= 0 ? '' : 'neg') : ''}
+    ${w.planned ? chip(`<b>${money(w.planned, { short: true })}</b> planned later this week`, w.B && w.planned > w.remaining ? 'neg' : '') : ''}
     ${spentSoFar ? chip(`On pace for <b>${money(projected, { short: true })}</b>`, w.B && projected > w.B ? 'neg' : '') : ''}
     ${round2(diff) ? chip(`<b>${money(diff, { sign: true, short: true })}</b> vs last week`, diff > 0 ? 'neg' : 'pos') : ''}
     ${chip(`<b>${noSpend}</b> no-spend day${noSpend === 1 ? '' : 's'}`)}
@@ -847,7 +872,7 @@ function viewDashboard() {
   const alerts = budgetStatus().filter((b) => b.ratio >= .9);
   const alertHtml = alerts.length ? `<div class="alert ${alerts.some((a) => a.ratio > 1) ? 'over' : 'warn'}">${icon('alert')}<div>${alerts.map((a) => `<b>${esc(a.name)}</b> ${a.ratio > 1 ? `is ${money(a.spent - a.amount)} over its ${a.period} budget` : `has ${money(a.amount - a.spent)} left this ${a.period === 'weekly' ? 'week' : 'month'}`}`).join(' · ')}</div></div>` : '';
 
-  const weekEx = expensesIn(w.start, w.end);
+  const weekEx = expensesIn(w.start, t);
   const recent = newestFirst(state.transactions).slice(0, 7);
   const upcoming = state.recurring.filter((r) => r.active && r.nextDate <= addDays(t, 14)).sort((a, b) => a.nextDate.localeCompare(b.nextDate)).slice(0, 5);
   const saved = mInc - mExp;
@@ -860,7 +885,7 @@ function viewDashboard() {
     ${backupCard()}
     <div class="stats">
       <div class="stat"><div class="k">Total balance</div><div class="v ${totalBalance() < 0 ? 'neg' : ''}">${moneyHtml(totalBalance())}</div><div class="d">${state.accounts.length} account${state.accounts.length === 1 ? '' : 's'}</div></div>
-      <div class="stat"><div class="k">Income in ${MONTH_SHORT[now().getMonth()]}</div><div class="v pos">${moneyHtml(mInc)}</div><div class="d">${plural(incomeIn(mFrom, mTo).length, 'payment')}</div></div>
+      <div class="stat"><div class="k">Income in ${MONTH_SHORT[now().getMonth()]}</div><div class="v pos">${moneyHtml(mInc)}</div><div class="d">${plural(incomeIn(mFrom, t).length, 'payment')}</div></div>
       <div class="stat"><div class="k">Spent in ${MONTH_SHORT[now().getMonth()]}</div><div class="v neg">${moneyHtml(mExp)}</div><div class="d">${money(mExp / Math.max(1, parseISO(t).getDate()), { short: true })} a day on average</div></div>
       <div class="stat"><div class="k">Kept this month</div><div class="v ${saved < 0 ? 'neg' : ''}">${moneyHtml(saved)}</div><div class="d">${mInc ? `<span class="${saved > 0 ? 'pos' : saved < 0 ? 'neg' : ''}">${Math.round(saved / mInc * 100)}% of income</span>` : 'Add income to see your savings rate'}</div></div>
     </div>
@@ -893,7 +918,9 @@ function accountStrip() {
 
 function backupCard() {
   // Signed in: sync already keeps a copy of everything in the account, so no "back up your data" reminder.
-  if (cloud()?.info().signedIn) return '';
+  // `remembered` covers the moment after opening, before Firebase has restored the sign-in (the card used to flash).
+  const ci = cloud()?.info();
+  if (ci?.signedIn || ci?.remembered) return '';
   const days = backupDue();
   if (!days) return '';
   const why = state.settings.lastBackup ? `It’s been ${days} days since your last backup.` : 'You haven’t saved a backup yet.';
@@ -1031,7 +1058,7 @@ function budgetStatus() {
   const t = today();
   return state.budgets.map((b) => {
     const [from, to] = b.period === 'weekly' ? [weekStartOf(t), addDays(weekStartOf(t), 6)] : [monthStart(t), monthEnd(t)];
-    const spent = round2(sum(expensesIn(from, to).filter((x) => x.categoryId === b.categoryId), (x) => x.amount));
+    const spent = round2(sum(expensesIn(from, t).filter((x) => x.categoryId === b.categoryId), (x) => x.amount)); // up to today
     const daysLeft = daysBetween(t, to) + 1;
     return { ...b, name: catName(b.categoryId), color: cat(b.categoryId)?.color, spent, ratio: b.amount ? spent / b.amount : 0, daysLeft };
   });
@@ -1059,7 +1086,7 @@ function viewBudgets() {
       <div class="panel"><h2>Weekly spending limit</h2>
         ${s.weeklyBudget ? `<div class="meter" style="padding-top:0"><div class="meter-top"><span class="name">All everyday spending</span><span class="vals">${money(w.spent, { short: true })} / ${money(w.B, { short: true })}</span></div>
           <div class="bar ${w.spent > w.B ? 'over' : w.spent / w.B > .8 ? 'warn' : ''}"><i style="width:${clamp(w.spent / w.B * 100, 0, 100)}%"></i></div>
-          <div class="meter-foot"><span>${money(Math.max(0, w.remaining))} left</span><span>${w.daysLeft} day${w.daysLeft > 1 ? 's' : ''} to go</span></div></div>` : '<p class="hint" style="margin-bottom:12px">You haven’t set a weekly limit yet.</p>'}
+          <div class="meter-foot">${w.remaining >= 0 ? `<span>${money(w.remaining)} left</span>` : `<span class="neg">${money(-w.remaining)} over</span>`}<span>${w.daysLeft} day${w.daysLeft > 1 ? 's' : ''} to go</span></div></div>` : '<p class="hint" style="margin-bottom:12px">You haven’t set a weekly limit yet.</p>'}
         <button class="btn" id="setBudget">${icon('edit')}${s.weeklyBudget ? 'Change limit' : 'Set weekly limit'}</button>
         <p class="hint" style="margin-top:12px">${excluded.length ? `Fixed costs are left out of this limit: ${esc(excluded.join(', '))}. Change this per category in Settings.` : 'All expense categories count toward this limit.'}</p>
       </div>
@@ -1214,7 +1241,7 @@ function viewReports() {
   let [from, to] = periodRange(p);
   if (p === 'all') { const ds = state.transactions.map((x) => x.date).sort(); from = ds[0] || t; to = t; }
   const effTo = to > t ? t : to;
-  const ex = expensesIn(from, to), inc = incomeIn(from, to);
+  const ex = expensesIn(from, effTo), inc = incomeIn(from, effTo); // up to today: later-dated payments haven't happened
   const tEx = sum(ex, (x) => x.amount), tIn = sum(inc, (x) => x.amount);
   const days = Math.max(1, daysBetween(from, effTo) + 1);
   const rows = categoryRows(ex);
@@ -1225,8 +1252,8 @@ function viewReports() {
   const monthGroups = months.map((m) => {
     const d = parseISO(m);
     return { label: MONTH_SHORT[d.getMonth()], tipTitle: `${MONTH_SHORT[d.getMonth()]} ${d.getFullYear()}`, values: [
-      { v: round2(sum(incomeIn(m, monthEnd(m)), (x) => x.amount)), cls: 'm-in', name: 'Income' },
-      { v: round2(sum(expensesIn(m, monthEnd(m)), (x) => x.amount)), cls: 'm-out', name: 'Expenses' }] };
+      { v: round2(sum(incomeIn(m, monthEnd(m) > t ? t : monthEnd(m)), (x) => x.amount)), cls: 'm-in', name: 'Income' },
+      { v: round2(sum(expensesIn(m, monthEnd(m) > t ? t : monthEnd(m)), (x) => x.amount)), cls: 'm-out', name: 'Expenses' }] };
   });
   // daily chart
   let daily = '';

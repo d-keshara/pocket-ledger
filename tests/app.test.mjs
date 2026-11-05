@@ -127,6 +127,92 @@ describe('weekly runway (what you can spend today)', () => {
     }
   });
 
+  test('once the weekly limit is used up: Rs 0 left today, a red "over this week" badge, and no lines for the rest of the week', (t) => {
+    const { L, S, doc, add, expenseCat, close } = makeApp(); t.after(close); // Wed 7 Oct, week Mon 5 - Sun 11
+    S.settings.weeklyBudget = 5000;
+    const food = expenseCat('Food').id;
+    add({ type: 'expense', amount: 3000, date: '2026-10-05', categoryId: food });
+    add({ type: 'expense', amount: 2500, date: '2026-10-06', categoryId: food }); // limit used up on Tuesday
+    add({ type: 'expense', amount: 400, date: '2026-10-07', categoryId: food });
+    L.ui.view = 'dashboard'; L.render();
+    assert.match(doc.querySelector('.runway-lead .label').textContent, /Left to spend today/);
+    assert.match(doc.querySelector('.runway-lead .big').textContent, /^Rs\s?0\.00$/);
+    assert.match(doc.querySelector('.over-badge').textContent, /Rs\s?900 over this week/);
+    assert.match(doc.querySelector('.runway-lead').textContent, /Your limit resets on Monday/);
+    const days = [...doc.querySelectorAll('.day')];
+    for (const d of days.slice(3)) { // Thu-Sun
+      assert.equal(d.querySelector('.allow'), null);
+      assert.equal(d.querySelector('.share').textContent.trim(), '–');
+      assert.match(d.getAttribute('data-tip'), /Weekly limit used up/);
+    }
+    assert.ok(days[0].querySelector('.allow'), 'past days keep their line');
+  });
+
+  test('over today’s share (week not used up): Rs 0 left today and a red "over today" badge; none when under', (t) => {
+    const { L, S, doc, add, expenseCat, close } = makeApp(); t.after(close);
+    S.settings.weeklyBudget = 7000; // Wednesday: 1,400 a day
+    add({ type: 'expense', amount: 2000, date: '2026-10-07', categoryId: expenseCat('Food').id });
+    L.ui.view = 'dashboard'; L.render();
+    assert.match(doc.querySelector('.runway-lead .big').textContent, /^Rs\s?0\.00$/);
+    assert.match(doc.querySelector('.over-badge').textContent, /Rs\s?600 over today/);
+    assert.equal(doc.querySelector('.reset-note'), null);
+    S.transactions[0].amount = 400; L.render();
+    assert.equal(doc.querySelector('.over-badge'), null);
+  });
+
+  test('bar numbers: spent always on top, the day’s share always under the day name', (t) => {
+    const { L, S, doc, add, expenseCat, close } = makeApp(); t.after(close);
+    S.settings.weeklyBudget = 7000;
+    add({ type: 'expense', amount: 500, date: '2026-10-05', categoryId: expenseCat('Food').id });
+    L.ui.view = 'dashboard'; L.render();
+    const days = [...doc.querySelectorAll('.day')];
+    assert.match(days[0].querySelector('.amt').textContent, /500/);       // Mon: spent
+    assert.match(days[0].querySelector('.share').textContent, /1,000/);   // Mon: its share 7000 / 7
+    assert.equal(days[5].querySelector('.amt').textContent.trim(), '');   // Sat (future): nothing spent, empty top
+    assert.ok(days[5].querySelector('.share').textContent.trim() !== '', 'future day shows its share under the name');
+  });
+
+  test('past days with nothing spent have no dashed line, but still show their share under the day', (t) => {
+    const { L, S, doc, add, expenseCat, close } = makeApp(); t.after(close); // Wed 7 Oct
+    S.settings.weeklyBudget = 6000;
+    add({ type: 'expense', amount: 2000, date: '2026-10-07', categoryId: expenseCat('Food').id }); // only today
+    L.ui.view = 'dashboard'; L.render();
+    const days = [...doc.querySelectorAll('.day')];
+    for (const d of days.slice(0, 2)) { // Mon, Tue: nothing spent
+      assert.equal(d.querySelector('.allow'), null);
+      assert.notEqual(d.querySelector('.share').textContent.trim(), '–');
+    }
+    assert.ok(days[2].querySelector('.allow'), 'today keeps its line');
+    assert.ok(days[3].querySelector('.allow'), 'future days keep their line');
+  });
+
+  test('an expense dated later this week is planned, not spent: no "over" badge, but the coming days keep it aside', (t) => {
+    const { L, S, doc, add, expenseCat, close } = makeApp(); t.after(close); // Wed 7 Oct
+    S.settings.weeklyBudget = 6000;
+    const food = expenseCat('Food').id;
+    add({ type: 'expense', amount: 1750, date: '2026-10-06', categoryId: food });
+    add({ type: 'expense', amount: 2000, date: '2026-10-07', categoryId: food });
+    add({ type: 'expense', amount: 2500, date: '2026-10-10', categoryId: food }); // Saturday, not happened yet
+    const w = L.weekInfo();
+    assert.equal(w.spent, 3750);
+    assert.equal(w.planned, 2500);
+    assert.equal(w.remaining, 2250);                 // 6000 - 3750 actually spent
+    assert.equal(w.perDayAfter, 0);                  // 2250 left - 2500 planned: nothing more for the coming days
+    L.ui.view = 'dashboard'; L.render();
+    assert.match(doc.querySelector('.over-badge').textContent, /over today/); // over today's share, not "over this week"
+    assert.match(doc.querySelector('.stats').textContent, /Spent in Oct\s*Rs\s?3,750\.00/);
+    assert.match(doc.querySelector('.runway-note').textContent, /Rs\s?2,500\s*planned later this week/);
+  });
+
+  test('a tiny share keeps its dashed line a little above the bottom edge', (t) => {
+    const { L, S, doc, add, expenseCat, close } = makeApp(); t.after(close);
+    S.settings.weeklyBudget = 5000;
+    add({ type: 'expense', amount: 4900, date: '2026-10-05', categoryId: expenseCat('Food').id }); // 100 left for 5 days
+    L.ui.view = 'dashboard'; L.render();
+    const today = doc.querySelectorAll('.day')[2];
+    assert.equal(today.querySelector('.allow').style.bottom, '5%');
+  });
+
   test('every day keeps the share it had: what was left of the limit / days left then', (t) => {
     const { L, S, add, expenseCat, close } = makeApp(); t.after(close); // Wed 7 Oct
     S.settings.weeklyBudget = 7000;
@@ -726,6 +812,13 @@ describe('round + button while scrolling (phones)', () => {
 
 /* ------------------------------------------------ chart day labels */
 describe('bar chart labels', () => {
+  test('the scale uses round steps (0, 10k, 20k ... 50k), not 13k, 25k, 38k', (t) => {
+    const { L, close } = makeApp(); t.after(close);
+    const svg = L.drawBarChart([{ label: 'Oct', values: [{ v: 45000, cls: 'x', name: 'x' }] }], { width: 330 });
+    const ticks = [...svg.matchAll(/<text class="axis"[^>]*text-anchor="end">([^<]+)</g)].map((m) => m[1]).join(',');
+    assert.match(ticks, /^Rs\s?0,Rs\s?10k,Rs\s?20k,Rs\s?30k,Rs\s?40k,Rs\s?50k$/);
+  });
+
   test('on a phone-width chart every weekday and month has its label', (t) => {
     const { L, close } = makeApp(); t.after(close);
     const groups = (labels) => labels.map((label) => ({ label, values: [{ v: 1, cls: 'x', name: 'x' }] }));
@@ -755,6 +848,25 @@ describe('backup reminder', () => {
     assert.equal(app.doc.querySelector('.alert.backup'), null);
     c.signedIn = false; app.L.render();
     assert.ok(app.doc.querySelector('.alert.backup'), 'shown again after signing out');
+  });
+
+  test('no flash on opening: signed in last time means no card, even before the sign-in is restored', (t) => {
+    const app = makeApp(); t.after(app.close);
+    addHistory(app, 10, 30);
+    const { c } = fakeCloud(app.w, { signedIn: false });
+    const info = c.info; c.info = () => ({ ...info(), status: 'loading', remembered: true }); // Firebase still starting
+    app.L.ui.view = 'dashboard'; app.L.render();
+    assert.equal(app.doc.querySelector('.alert.backup'), null);
+  });
+
+  test('Budgets page: over the weekly limit says how much over, not "Rs 0.00 left"', (t) => {
+    const app = makeApp(); t.after(app.close);
+    app.S.settings.weeklyBudget = 1000;
+    app.add({ type: 'expense', amount: 1250, date: '2026-10-06', categoryId: app.expenseCat('Food').id });
+    app.L.ui.view = 'budgets'; app.L.render();
+    const foot = app.doc.querySelector('.meter-foot').textContent;
+    assert.match(foot, /Rs\s?250\.00 over/);
+    assert.doesNotMatch(foot, /left/);
   });
 
   test('new users with under 5 transactions are not nagged', (t) => {

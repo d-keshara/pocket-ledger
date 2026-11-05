@@ -185,7 +185,8 @@
   window.PocketCloud = {
     available: !!config,
     /* What the Settings page shows. */
-    info: () => ({ status, signedIn: !!user, email: user ? user.email : '', verified: !!(user && user.emailVerified), sync: { ...sync } }),
+    // remembered: signed in last time on this device. True straight away on opening, before Firebase has restored the sign-in.
+    info: () => ({ status, signedIn: !!user, remembered: flag.get(), email: user ? user.email : '', verified: !!(user && user.emailVerified), sync: { ...sync } }),
     /* app.js gives the sync engine access to its data. Syncing starts once someone is signed in. */
     attach: (h) => { hooks = h; if (user) startSync(); },
     /* app.js calls this after every save; the engine sends the change a moment later. */
