@@ -41,6 +41,8 @@ const ICONS = {
   play: '<path d="M7 4l13 8-13 8z"/>',
   minus: '<path d="M5 12h14"/>',
   cloud: '<path d="M17.5 19H7a5 5 0 1 1 .9-9.92A6 6 0 0 1 19 10.5a4.25 4.25 0 0 1-1.5 8.5z"/>',
+  // Not signed in: the same cloud with a diagonal line; the mask cuts a small gap on each side of the line.
+  cloudOff: '<mask id="pl-cloud-off"><rect width="24" height="24" fill="#fff"/><path d="M3 3 21 21" stroke="#000" stroke-width="5"/></mask><path mask="url(#pl-cloud-off)" d="M17.5 19H7a5 5 0 1 1 .9-9.92A6 6 0 0 1 19 10.5a4.25 4.25 0 0 1-1.5 8.5z"/><path d="M3.5 3.5 20.5 20.5"/>',
   cloudOk: '<path d="M17.5 19H7a5 5 0 1 1 .9-9.92A6 6 0 0 1 19 10.5a4.25 4.25 0 0 1-1.5 8.5z"/><path d="m9 13.5 2 2 4-4"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
   eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
@@ -1477,7 +1479,7 @@ function cloudButton() {
   const warn = ['offline', 'error'].includes(i.sync?.state) ? ' warn' : '';
   return i.signedIn
     ? `<button class="btn cloud-btn on${warn}" data-go="settings" aria-label="Account: signed in as ${esc(i.email)}">${icon('cloudOk')}<span>Account</span></button>`
-    : `<button class="btn cloud-btn" id="cloudHead" aria-label="Sign in or create an account">${icon('cloud')}<span>Sign in</span></button>`;
+    : `<button class="btn cloud-btn" id="cloudHead" aria-label="Not signed in. Sign in or create an account">${icon('cloudOff')}<span>Sign in</span></button>`;
 }
 function cloudPanel() {
   const c = cloud(); if (!c) return '';
