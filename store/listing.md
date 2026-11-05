@@ -59,7 +59,10 @@ Designed and developed by D. Kezara.
 - Web version: https://d-keshara.github.io/pocket-ledger/
 - Delete account (Play Console > App content > Data safety > "Delete account URL"): https://d-keshara.github.io/pocket-ledger/account.html?mode=deleteAccount
 
-## What's new in 1.9.1 (release notes, max 500)
+## What's new in 1.9.2 (release notes, max 500)
+Fixed: on the This Week chart, the dashed daily-limit lines for today and the coming days now stay inside the chart instead of going off the top.
+
+## What's new in 1.9.1, kept for reference (release notes, max 500)
 Fixed: the strips behind the phone's status bar and navigation buttons now match your colour theme instead of showing grey.
 Fixed: more space between the bottom tab bar and the phone's navigation buttons.
 

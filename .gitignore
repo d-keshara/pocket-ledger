@@ -33,3 +33,10 @@ __pycache__/
 build/
 *.spec
 node_modules/
+
+### IDE settings, design reference images and promo posts (kept on this computer only) ###
+.idea/
+android/.idea/
+images/
+*.iml
+store/promo/
