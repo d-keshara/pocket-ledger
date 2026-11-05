@@ -230,6 +230,13 @@ function weekInfo(refIso = today()) {
   const remaining = round2(B - spent);
   // Future days share what is left once today's share is used up.
   const perDayAfter = daysLeft > 1 ? Math.max(0, remaining - Math.max(0, leftToday)) / (daysLeft - 1) : 0;
+  // Each day's share: up to today, what that day had when it was "today" (what was left of the limit / days left then),
+  // so a day never turns red after midnight just because it became a past day. Future days get perDayAfter.
+  let spentBefore = 0;
+  days.forEach((d, i) => {
+    d.share = !B ? 0 : i <= todayIdx ? Math.max(0, B - spentBefore) / (7 - i) : perDayAfter;
+    spentBefore = round2(spentBefore + d.spent);
+  });
   return { start, end, days, spent, B, todayIdx, isCurrent, daysLeft, allowanceToday, spentToday, leftToday, remaining, perDayAfter, counted };
 }
 
@@ -792,11 +799,11 @@ function viewDashboard() {
       <button class="link-btn" id="setBudget">Change weekly limit (${esc(money(w.B, { short: true }))})</button></div>`;
   }
   const even = w.B / 7;
-  // Today's and the coming days' shares count too (with room above), so their dashed lines sit inside the bars, not off the top.
-  const scaleMax = Math.max(even * 1.5, ...w.days.map((d) => d.spent), w.allowanceToday * 1.15, w.perDayAfter * 1.15, 1);
+  // Every day's share counts too (with room above), so the dashed lines sit inside the bars, not off the top.
+  const scaleMax = Math.max(even * 1.5, ...w.days.map((d) => d.spent), ...w.days.map((d) => d.share * 1.15), 1);
   const daysHtml = w.days.map((d, i) => {
     const dt = parseISO(d.date); const future = i > w.todayIdx; const isToday = i === w.todayIdx;
-    const allowance = future ? w.perDayAfter : (isToday ? w.allowanceToday : even);
+    const allowance = d.share;
     const h = (d.spent / scaleMax) * 100; const ah = w.B ? Math.min(97, (allowance / scaleMax) * 100) : 0;
     const over = w.B && d.spent > allowance + 0.001;
     const tipTxt = `${fmtDate(d.date, { full: true })}<br>${future ? `Plan up to <b>${esc(money(allowance))}</b>` : `Spent <b>${esc(money(d.spent))}</b>${w.B ? `<br>Daily share ${esc(money(allowance))}` : ''}`}`;

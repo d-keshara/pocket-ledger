@@ -113,6 +113,31 @@ describe('weekly runway (what you can spend today)', () => {
     assert.equal(w.perDayAfter, 800);          // (3500 - 300 still left today) / 4 days
   });
 
+  test('a day under its share stays under after midnight (it was turning red on the next day)', (t) => {
+    // Thursday 8 Oct: nothing spent Mon-Wed, so Thursday's share is 7000 / 4 = 1750. Spend 1500 = under.
+    for (const now of ['2026-10-08T20:00:00', '2026-10-09T09:00:00']) { // Thursday evening, then Friday morning
+      const { L, S, doc, add, expenseCat, close } = makeApp(now); t.after(close);
+      S.settings.weeklyBudget = 7000;
+      add({ type: 'expense', amount: 1500, date: '2026-10-08', categoryId: expenseCat('Food').id });
+      const thu = L.weekInfo().days[3];
+      assert.equal(thu.share, 1750, now);                 // the same share on both days, not 7000 / 7 = 1000
+      L.ui.view = 'dashboard'; L.render();
+      assert.equal(doc.querySelectorAll('.day .fill.over').length, 0, now);
+      assert.match(doc.querySelectorAll('.day')[3].getAttribute('data-tip'), /Daily share Rs\s?1,750/, now);
+    }
+  });
+
+  test('every day keeps the share it had: what was left of the limit / days left then', (t) => {
+    const { L, S, add, expenseCat, close } = makeApp(); t.after(close); // Wed 7 Oct
+    S.settings.weeklyBudget = 7000;
+    const food = expenseCat('Food').id;
+    add({ type: 'expense', amount: 1000, date: '2026-10-05', categoryId: food }); // Mon
+    add({ type: 'expense', amount: 2000, date: '2026-10-06', categoryId: food }); // Tue (over its share)
+    const shares = L.weekInfo().days.map((d) => Math.round(d.share));
+    assert.equal(shares.slice(0, 3).join(), '1000,1000,800'); // Mon 7000/7, Tue 6000/6, Wed (today) 4000/5
+    assert.equal(L.weekInfo().days[2].share, L.weekInfo().allowanceToday);
+  });
+
   test('fixed costs (rent) and other weeks are not counted', (t) => {
     const { L, S, add, expenseCat, close } = makeApp(); t.after(close);
     S.settings.weeklyBudget = 7000;
