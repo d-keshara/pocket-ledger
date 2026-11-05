@@ -33,6 +33,7 @@ const ICONS = {
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
   alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  chevron: '<path d="m9 6 6 6-6 6"/>',
   sliders: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
   swap: '<path d="M7 16V4M3 8l4-4 4 4M17 8v12M21 16l-4 4-4-4"/>',
   pause: '<path d="M8 5v14M16 5v14"/>',
@@ -182,6 +183,21 @@ function accountBalance(a) {
   return round2(b);
 }
 const totalBalance = () => round2(sum(state.accounts, accountBalance));
+/* How much one transaction adds to (+) or takes from (-) an account. */
+function txEffect(t, accId) {
+  if (!t) return 0;
+  if (t.type === 'income') return t.accountId === accId ? t.amount : 0;
+  if (t.type === 'expense') return t.accountId === accId ? -t.amount : 0;
+  return (t.accountId === accId ? -t.amount : 0) + (t.toAccountId === accId ? t.amount : 0);
+}
+/* Saving `rec` (replacing `old` when editing): the account money leaves and its balance afterwards, if that goes below
+   zero and gets worse. Accounts marked "can go below zero" (credit card, loan) never warn. */
+function overdraws(rec, old) {
+  const a = state.accounts.find((x) => x.id === rec.accountId);
+  if (!a || a.credit) return null;
+  const now = accountBalance(a); const after = round2(now - txEffect(old, a.id) + txEffect(rec, a.id));
+  return after < 0 && after < now ? { account: a, after } : null;
+}
 
 /* ================= recurring ================= */
 function nextOccurrence(r, iso) {
@@ -213,10 +229,20 @@ function postDueRecurring() {
 const FREQ = { daily: 'Every day', weekly: 'Every week', biweekly: 'Every 2 weeks', monthly: 'Every month', yearly: 'Every year' };
 
 /* ================= weekly runway ================= */
+/* The day this person started using the app: the welcome screen sets it; for older data (and backdated entries)
+   the oldest transaction counts if it is earlier. */
+function startedOn() {
+  const first = state.transactions.reduce((m, x) => (x.date < m ? x.date : m), state.settings.startedOn || today());
+  return first;
+}
 function weekInfo(refIso = today()) {
   const start = weekStartOf(refIso); const end = addDays(start, 6);
   const t = today();
-  const B = +state.settings.weeklyBudget || 0;
+  const fullB = +state.settings.weeklyBudget || 0;
+  // First week, started mid-week (e.g. Thursday): the days before have no share, and the limit is cut to the days
+  // left (6,000 x 4/7), so the daily amount is the normal one. From the next week on, the full limit.
+  const s0 = startedOn(); const firstIdx = s0 > start && s0 <= end ? daysBetween(start, s0) : 0;
+  const B = round2(fullB * (7 - firstIdx) / 7);
   const counted = (tx) => cat(tx.categoryId)?.weekly !== false;
   const ex = expensesIn(start, end).filter(counted);
   const days = Array.from({ length: 7 }, (_, i) => {
@@ -241,10 +267,11 @@ function weekInfo(refIso = today()) {
   // so a day never turns red after midnight just because it became a past day. Future days get perDayAfter.
   let spentBefore = 0;
   days.forEach((d, i) => {
-    d.share = !B ? 0 : i <= todayIdx ? Math.max(0, B - spentBefore) / (7 - i) : perDayAfter;
+    d.beforeStart = i < firstIdx;
+    d.share = !B || d.beforeStart ? 0 : i <= todayIdx ? Math.max(0, B - spentBefore) / (7 - i) : perDayAfter;
     spentBefore = round2(spentBefore + d.spent);
   });
-  return { start, end, days, spent, planned, B, todayIdx, isCurrent, daysLeft, allowanceToday, spentToday, leftToday, remaining, perDayAfter, counted };
+  return { start, end, days, spent, planned, B, fullB, firstIdx, todayIdx, isCurrent, daysLeft, allowanceToday, spentToday, leftToday, remaining, perDayAfter, counted };
 }
 
 /* ================= tooltip ================= */
@@ -464,6 +491,20 @@ function txForm(existing = {}) {
       else rec.toAccountId = draft.toAccountId;
     } else rec.categoryId = draft.categoryId;
     if (existing.recurringId) rec.recurringId = existing.recurringId;
+    const od = !m._negOk && overdraws(rec, isEdit ? state.transactions.find((t) => t.id === existing.id) : null);
+    if (od) {
+      // Ask first, right in the form: usually the income that should come first hasn't been added yet.
+      $('#negWarn', m)?.remove();
+      $('.modal-body', m).insertAdjacentHTML('afterbegin', `<div class="alert over neg-warn" id="negWarn" role="alert">${icon('alert')}<div>
+        <b>This takes ${esc(od.account.name)} to ${esc(money(od.after))}.</b> Did you forget to add income first?
+        <div class="alert-actions"><button class="btn small primary" id="negOk" type="button">Save anyway</button><button class="btn small ghost" id="negBack" type="button">Go back</button></div>
+        <span class="hint">A credit card or loan? Edit the account and turn on “Can go below zero”.</span></div></div>`);
+      $('#negOk', m).onclick = () => { m._negOk = true; commit(m, again); };
+      $('#negBack', m).onclick = () => { $('#negWarn', m)?.remove(); $('#fAmount', m)?.focus(); };
+      $('.modal-body', m).scrollTop = 0;
+      return;
+    }
+    m._negOk = false; $('#negWarn', m)?.remove();
     if (isEdit) {
       const cur = state.transactions.find((t) => t.id === existing.id);
       // Replace every field, so switching type (e.g. transfer -> expense) leaves no stale toAccountId/categoryId behind.
@@ -833,7 +874,7 @@ function viewDashboard() {
       <div class="big-row"><div class="big ${left > 0 ? '' : 'zero'}">${moneyHtml(left)}</div>${badge}</div>
       ${weekUsedUp ? `<div class="reset-note">Your limit resets on ${DAY_LONG[parseISO(addDays(w.end, 1)).getDay()]}</div>` : ''}
       <div class="today-pair">${mini('Spent today', moneyHtml(w.spentToday), 'neg')}${incomeMini}</div>
-      <button class="link-btn" id="setBudget">Change weekly limit (${esc(money(w.B, { short: true }))})</button></div>`;
+      <button class="link-btn" id="setBudget">Change weekly limit (${esc(money(w.fullB, { short: true }))})</button></div>`;
   }
   const even = w.B / 7;
   // Every day's share counts too (with room above), so the dashed lines sit inside the bars, not off the top.
@@ -850,19 +891,20 @@ function viewDashboard() {
     // A future day can already have expenses dated on it (rent on Saturday): shown as a lighter "planned" bar.
     // Its share is what is left to spend each day on top of those, so the bar is never marked red.
     const planned = future && d.spent > 0;
-    const tipTxt = `${fmtDate(d.date, { full: true })}<br>${future
+    const tipTxt = d.beforeStart ? `${fmtDate(d.date, { full: true })}<br>Before you started` : `${fmtDate(d.date, { full: true })}<br>${future
       ? `${planned ? `Already planned <b>${esc(money(d.spent))}</b><br>` : ''}${w.B ? (hasShare ? `Plan up to <b>${esc(money(allowance))}</b>${planned ? ' more' : ''}` : 'Weekly limit used up') : ''}`
       : `Spent <b>${esc(money(d.spent))}</b>${w.B ? `<br>Daily share ${esc(money(allowance))}` : ''}`}`;
     return `<div class="day ${future ? 'future' : ''} ${isToday ? 'today' : ''}" data-tip="${esc(tipTxt)}">
       <div class="amt">${d.spent > 0 ? moneyHtml(d.spent, { short: true }) : '&nbsp;'}</div>
       <div class="col">${future ? (planned ? `<div class="fill planned" style="height:${h}%"></div>` : '') : `<div class="fill ${over ? 'over' : ''}" style="height:${h}%"></div>`}${line ? `<div class="allow" style="bottom:${ah}%"></div>` : ''}</div>
       <div class="dn">${isToday ? 'Today' : DAY_SHORT[dt.getDay()]}</div>
-      ${w.B ? `<div class="share" title="Daily share">${hasShare ? moneyHtml(allowance, { short: true }) : '–'}</div>` : ''}</div>`;
+      ${w.B ? `<div class="share" title="Daily share">${d.beforeStart ? '&nbsp;' : hasShare ? moneyHtml(allowance, { short: true }) : '–'}</div>` : ''}</div>`;
   }).join('');
   const diff = w.spent - lastWSamePoint;
   const chip = (html, cls = '') => `<span class="chip ${cls}">${html}</span>`;
   const notes = `<div class="runway-note">
     ${w.B && w.remaining > 0 ? chip(w.remaining >= 0 ? `<b>${money(w.remaining, { short: true })}</b> left this week` : `<b>${money(-w.remaining, { short: true })}</b> over this week`, w.remaining >= 0 ? '' : 'neg') : ''}
+    ${w.B && w.firstIdx ? chip(`First week: <b>${money(w.B, { short: true })}</b> limit, from ${DAY_LONG[parseISO(addDays(w.start, w.firstIdx)).getDay()]}`) : ''}
     ${w.planned ? chip(`<b>${money(w.planned, { short: true })}</b> planned later this week`, w.B && w.planned > w.remaining ? 'neg' : '') : ''}
     ${spentSoFar ? chip(`On pace for <b>${money(projected, { short: true })}</b>`, w.B && projected > w.B ? 'neg' : '') : ''}
     ${round2(diff) ? chip(`<b>${money(diff, { sign: true, short: true })}</b> vs last week`, diff > 0 ? 'neg' : 'pos') : ''}
@@ -975,7 +1017,8 @@ function viewTransactions() {
         ${nFilters ? '<button class="link-btn filter-reset" id="fReset" type="button">Reset filters</button>' : ''}
         </div>
       </div>
-      <div class="summary-bar"><span>Income <b class="pos">${moneyHtml(inc)}</b></span><span>Expenses <b>${moneyHtml(ex)}</b></span><span>Net <b class="${inc - ex < 0 ? 'neg' : ''}">${moneyHtml(inc - ex, { sign: true })}</b></span><span>${list.length} transaction${list.length === 1 ? '' : 's'}</span></div>
+      <div class="summary-bar"><span>Income<b class="pos">${moneyHtml(inc)}</b></span><span>Expenses<b>${moneyHtml(ex)}</b></span><span>Net<b class="${inc - ex < 0 ? 'neg' : ''}">${moneyHtml(inc - ex, { sign: true })}</b></span></div>
+      ${list.length ? `<p class="tx-count">${plural(list.length, 'transaction')}</p>` : ''}
       ${list.length ? txListGrouped(list) : empty('search', state.transactions.length ? 'No matches' : 'No transactions yet', state.transactions.length ? 'Try a different period or clear the search.' : 'Add income and expenses to start tracking.', state.transactions.length ? '' : `<button class="btn primary" data-add="expense">${icon('plus')}Add expense</button>`)}
     </div>`;
 }
@@ -1315,6 +1358,7 @@ function accForm(a = {}) {
     body: `<div class="stack"><label class="field"><span>Name</span><input class="input" id="an" value="${esc(a.name || '')}" placeholder="e.g. Cash, Savings, Credit card, eZ Cash" autofocus maxlength="40"></label>
       <label class="field"><span>Current balance (${esc(state.settings.symbol)})</span><input class="input calc" id="ai" type="text" inputmode="decimal" autocomplete="off" value="${a.id ? accountBalance(a) : 0}"></label>
       <p class="hint">Enter what’s in the account right now. For a credit card you owe money on, use a negative number.</p>
+      <label class="check-row"><input type="checkbox" id="acr" ${a.credit ? 'checked' : ''}><span><b>Can go below zero</b><span class="hint">For a credit card or loan. Other accounts warn you before spending more than they hold.</span></span></label>
       <div class="field"><span>Colour</span>${swatches(a.color || PALETTE[state.accounts.length % PALETTE.length])}</div></div>`,
     foot: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="as">Save account</button>',
     onMount: (m) => { const color = bindSwatches(m); $('#as', m).onclick = () => {
@@ -1322,10 +1366,10 @@ function accForm(a = {}) {
       const typed = round2(parseFloat($('#ai', m).value) || 0);
       /* The box shows the current balance, so work back to the starting balance that gives it, keeping past transactions. */
       const initial = a.id ? round2(typed - (accountBalance(a) - (+a.initial || 0))) : typed;
-      const rec = { name, initial, color: color() };
+      const rec = { name, initial, color: color(), credit: $('#acr', m).checked };
       if (!a.id) { state.accounts.push({ id: uid(), ...rec }); save(); closeModal(); render(); return toast('Account saved'); }
       const acc = state.accounts.find((x) => x.id === a.id);
-      const before = { name: acc.name, initial: acc.initial, color: acc.color };
+      const before = { name: acc.name, initial: acc.initial, color: acc.color, credit: !!acc.credit };
       Object.assign(acc, rec);
       save(); closeModal(); render();
       toast('Account saved', { label: 'Undo', run: () => { const x = state.accounts.find((y) => y.id === a.id); if (x) { Object.assign(x, before); save(); render(); } } });
@@ -1342,33 +1386,37 @@ function viewSettings() {
     <button class="icon-btn" data-cat-edit="${c.id}" aria-label="Edit">${icon('edit')}</button><button class="icon-btn" data-cat-del="${c.id}" aria-label="Delete">${icon('trash')}</button></div>`;
   }).join('');
   const signedIn = !!cloud()?.info().signedIn;
+  const row = (label, control, hint = '') => `<div class="set-row"><div class="set-label"><b>${label}</b>${hint ? `<span class="hint">${hint}</span>` : ''}</div>${control}</div>`;
+  const seg = (attr, value, opts) => `<div class="seg set-seg" role="radiogroup">${opts.map(([v, l]) => `<button type="button" role="radio" aria-checked="${String(v) === String(value)}" class="${String(v) === String(value) ? 'on' : ''}" ${attr}="${v}">${l}</button>`).join('')}</div>`;
+  const action = (id, ic, label, cls = '') => `<button class="set-action ${cls}" id="${id}" type="button">${icon(ic)}<span>${label}</span>${cls ? '' : icon('chevron')}</button>`;
   return `<div class="head"><div><h1>Settings</h1><p>Make it yours.${signedIn ? '' : ' Everything is stored only on this device.'}</p></div></div>
-    <div class="cols" style="margin-top:0">
-      <div class="panel"><h2>Profile</h2><div class="stack">
-        <label class="field"><span>Your name</span><input class="input" id="sName" value="${esc(s.name)}" maxlength="30"></label>
-        <div class="grid2">
-          <label class="field"><span>Currency</span><select class="input" id="sCur">${CURRENCIES.map(([c, sym]) => `<option value="${c}" ${s.currency === c ? 'selected' : ''}>${c} (${sym})</option>`).join('')}</select></label>
-          <label class="field"><span>Symbol shown</span><input class="input" id="sSym" value="${esc(s.symbol)}" maxlength="5"></label>
-          <label class="field"><span>Week starts on</span><select class="input" id="sWeek">${[1, 0, 6].map((d) => `<option value="${d}" ${s.weekStart === d ? 'selected' : ''}>${['Sunday', 'Monday', '', '', '', '', 'Saturday'][d]}</option>`).join('')}</select></label>
-          <label class="field"><span>Appearance</span><select class="input" id="sTheme">${[['system', systemLabel()], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => `<option value="${v}" ${s.theme === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-        </div>
-        <div class="field"><span>Colour theme</span><div class="palettes" role="radiogroup" aria-label="Colour theme">${PALETTES.map(([v, l]) => `<button type="button" role="radio" aria-checked="${(s.palette || 'forest') === v}" class="pal pal-${v}" data-pal="${v}"><i aria-hidden="true"></i><span>${l}</span></button>`).join('')}</div></div>
-        <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="sDec" ${s.decimals ? 'checked' : ''}> Show cents / decimals</label>
-      </div></div>
-      <div class="panel"><h2>Your data</h2><div class="stack">
-        <p class="hint" style="margin:0">Back up regularly so you never lose your history. Restore a backup on another device, or merge it to combine what both devices have.</p>
-        <p class="hint" id="lastBackup" style="margin:0;color:var(--ink-2)">${lastBackupText()}</p>
-        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="backup">${icon('download')}Save backup</button><button class="btn" id="restore">${icon('upload')}Restore backup</button><button class="btn" id="csvAll">${icon('download')}Export all as CSV</button></div>
-        <p class="hint" id="dataLoc" style="margin:0"></p>
-        <div style="border-top:1px solid var(--line);padding-top:14px"><button class="btn danger" id="reset">${icon('trash')}Erase all data</button></div>
-        <p class="hint shortcuts-hint" style="margin:0">Shortcuts: N new expense · I new income · Esc close</p>
-      </div></div>
-    </div>
-    ${notifyPanel()}
-    ${cloudPanel()}
-    <div class="cols">
-      <div class="panel"><h2>Expense categories <button class="btn small" data-cat-add="expense">${icon('plus')}Add</button></h2>${catList('expense')}</div>
-      <div class="panel"><h2>Income categories <button class="btn small" data-cat-add="income">${icon('plus')}Add</button></h2>${catList('income')}</div>
+    <div class="settings">
+      <section class="set-group"><h2 class="set-title">Profile</h2><div class="set-card">
+        ${row('Your name', `<input class="input" id="sName" value="${esc(s.name)}" maxlength="30" placeholder="Your name" aria-label="Your name">`)}
+      </div></section>
+      <section class="set-group"><h2 class="set-title">Money</h2><div class="set-card">
+        ${row('Currency', `<select class="input" id="sCur" aria-label="Currency">${CURRENCIES.map(([c, sym]) => `<option value="${c}" ${s.currency === c ? 'selected' : ''}>${c} (${sym})</option>`).join('')}</select>`)}
+        ${row('Symbol shown', `<input class="input set-short" id="sSym" value="${esc(s.symbol)}" maxlength="5" aria-label="Symbol shown">`)}
+        ${row('Show cents', `<input type="checkbox" class="switch" id="sDec" ${s.decimals ? 'checked' : ''} aria-label="Show cents / decimals">`, 'Rs 1,250.50 instead of Rs 1,251')}
+        ${row('Week starts on', seg('data-week', s.weekStart, [[1, 'Mon'], [0, 'Sun'], [6, 'Sat']]))}
+      </div></section>
+      <section class="set-group"><h2 class="set-title">Appearance</h2><div class="set-card">
+        ${row('Mode', seg('data-mode', s.theme, [['system', isNativeApp() ? 'Phone' : 'Auto'], ['light', 'Light'], ['dark', 'Dark']]), s.theme === 'system' ? systemLabel() : '')}
+        <div class="set-row set-col"><div class="set-label"><b>Colour theme</b></div>
+          <div class="palettes" role="radiogroup" aria-label="Colour theme">${PALETTES.map(([v, l]) => `<button type="button" role="radio" aria-checked="${(s.palette || 'forest') === v}" class="pal pal-${v}" data-pal="${v}"><i aria-hidden="true"></i><span>${l}</span></button>`).join('')}</div></div>
+      </div></section>
+      ${notifyPanel()}
+      <section class="set-group"><h2 class="set-title">Your data</h2><div class="set-card">
+        <div class="set-row set-col"><p class="hint" id="lastBackup" style="margin:0;color:var(--ink-2)">${lastBackupText()}</p>
+          <p class="hint" style="margin:0">Back up regularly so you never lose your history. Restore a backup on another device, or merge it to combine what both devices have.</p></div>
+        ${action('backup', 'download', 'Save backup')}
+        ${action('restore', 'upload', 'Restore backup')}
+        ${action('csvAll', 'download', 'Export all as CSV')}
+        ${action('reset', 'trash', 'Erase all data', 'danger')}
+      </div><p class="hint set-foot" id="dataLoc"></p><p class="hint set-foot shortcuts-hint">Shortcuts: N new expense · I new income · Esc close</p></section>
+      ${cloudPanel()}
+      <section class="set-group"><h2 class="set-title">Expense categories <button class="btn small" data-cat-add="expense">${icon('plus')}Add</button></h2><div class="set-card set-list">${catList('expense')}</div></section>
+      <section class="set-group"><h2 class="set-title">Income categories <button class="btn small" data-cat-add="income">${icon('plus')}Add</button></h2><div class="set-card set-list">${catList('income')}</div></section>
     </div>
     <section class="about" aria-label="About">
       ${logo(44)}
@@ -1431,7 +1479,7 @@ function cloudPanel() {
       ${i.status === 'error' ? '<p class="form-error" style="margin:0">Sync couldn’t start. Check your internet connection and try again.</p>' : ''}
       ${row(`<button class="btn primary" id="cloudUp">${icon('cloud')}Create account</button><button class="btn" id="cloudIn">Sign in</button>`)}`;
   }
-  return `<div class="panel" style="margin-top:18px"><h2>Sync &amp; account</h2><div class="stack">${body}</div></div>`;
+  return `<section class="set-group"><h2 class="set-title">Sync &amp; account</h2><div class="set-card set-pad"><div class="stack">${body}</div></div></section>`;
 }
 /* Redraws now, or once the person has finished typing in a box / closed the open window,
    so data arriving from another device never wipes what they're typing. */
@@ -1738,6 +1786,7 @@ function bindWelcome() {
     const s = state.settings; const cur = $('#wCur').value;
     s.name = $('#wName').value.trim(); s.currency = cur; s.symbol = CURRENCIES.find((c) => c[0] === cur)[1];
     s.weekStart = +$('#wWeek').value; s.weeklyBudget = round2(parseFloat($('#wLimit').value) || 0); s.onboarded = true;
+    s.startedOn = s.startedOn || today(); // the first week's limit counts only the days from here
     state.accounts[0].initial = round2(parseFloat($('#wCash').value) || 0);
     if (state.accounts[1]) state.accounts[1].initial = round2(parseFloat($('#wBank').value) || 0);
     save(); render();
@@ -1845,8 +1894,8 @@ function bindSettings(root) {
   $('#sName', root).onchange = (e) => { s.name = e.target.value.trim(); save(); toast('Name saved'); };
   $('#sCur', root).onchange = (e) => { s.currency = e.target.value; s.symbol = CURRENCIES.find((c) => c[0] === s.currency)[1]; save(); render(); };
   $('#sSym', root).onchange = (e) => { s.symbol = e.target.value.trim() || s.currency; save(); render(); };
-  $('#sWeek', root).onchange = (e) => { s.weekStart = +e.target.value; save(); render(); };
-  $('#sTheme', root).onchange = (e) => { s.theme = e.target.value; save(); render(); };
+  $$('[data-week]', root).forEach((b) => b.onclick = () => { s.weekStart = +b.dataset.week; save(); render(); });
+  $$('[data-mode]', root).forEach((b) => b.onclick = () => { s.theme = b.dataset.mode; save(); render(); });
   $$('[data-pal]', root).forEach((b) => b.onclick = () => { s.palette = b.dataset.pal; save(); render(); });
   $('#sDec', root).onchange = (e) => { s.decimals = e.target.checked; save(); render(); };
   bindNotifyPanel(root);
@@ -1965,16 +2014,15 @@ async function allowNotifications() {
 function notifyPanel() {
   if (!isNativeApp()) return '';
   const n = notifySettings();
-  const row = (key, title, hint, extra = '') => `<div class="notify-row"><label><input type="checkbox" data-notify="${key}" ${n[key] ? 'checked' : ''}>
-    <span><b>${title}</b><span class="hint">${hint}</span></span></label>${extra}</div>`;
-  return `<div class="panel" style="margin-top:18px"><h2>Notifications</h2><div class="stack">
+  const row = (key, title, hint, extra = '') => `<div class="set-row"><div class="set-label"><b>${title}</b><span class="hint">${hint}</span></div>
+    <div class="set-ctrl">${extra}<input type="checkbox" class="switch" data-notify="${key}" ${n[key] ? 'checked' : ''} aria-label="${title}"></div></div>`;
+  return `<section class="set-group"><h2 class="set-title">Notifications</h2><div class="set-card">
     ${row('daily', 'Daily reminder', 'A nudge to add the day’s spending. Skipped on days you already added something.',
       `<input class="input notify-time" type="time" id="notifyTime" value="${esc(n.dailyTime)}" aria-label="Reminder time" ${n.daily ? '' : 'disabled'}>`)}
     ${row('bills', 'Payment due tomorrow', 'The day before a scheduled payment or income, at 9:00.')}
     ${row('limit', 'Weekly limit warning', 'Once a week, the morning after you pass 80% of your weekly limit.')}
     ${row('summary', 'Weekly summary', 'On the last evening of your week: what you spent and how it went.')}
-    <p class="hint" style="margin:0">Your phone shows these itself. Nothing is sent anywhere.</p>
-  </div></div>`;
+  </div><p class="hint set-foot">Your phone shows these itself. Nothing is sent anywhere.</p></section>`;
 }
 function bindNotifyPanel(root) {
   $$('[data-notify]', root).forEach((box) => box.onchange = async () => {

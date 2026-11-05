@@ -26,6 +26,7 @@ function makeApp(now = '2026-10-07T10:00:00') {
   const L = w.__ledger;
   L.state = L.defaultState();
   L.state.settings.onboarded = true;
+  L.state.settings.startedOn = '2026-01-01'; // using the app for months (tests of a first week set their own date)
   const S = L.state;
   const expenseCat = (name) => S.categories.find((c) => c.type === 'expense' && c.name.startsWith(name));
   const incomeCat = () => S.categories.find((c) => c.type === 'income');
@@ -202,6 +203,34 @@ describe('weekly runway (what you can spend today)', () => {
     assert.match(doc.querySelector('.over-badge').textContent, /over today/); // over today's share, not "over this week"
     assert.match(doc.querySelector('.stats').textContent, /Spent in Oct\s*Rs\s?3,750\.00/);
     assert.match(doc.querySelector('.runway-note').textContent, /Rs\s?2,500\s*planned later this week/);
+  });
+
+  test('first week, started on Thursday: no share before, limit cut to the days left, normal daily amount', (t) => {
+    const { L, S, doc, close } = makeApp('2026-10-08T10:00:00'); t.after(close); // Thursday 8 Oct; week Mon 5 - Sun 11
+    S.settings.startedOn = '2026-10-08';
+    S.settings.weeklyBudget = 7000;
+    const w = L.weekInfo();
+    assert.equal(w.firstIdx, 3);
+    assert.equal(w.B, 4000);                    // 7000 x 4/7
+    assert.equal(w.allowanceToday, 1000);       // the normal 7000 / 7, not 7000 / 4
+    assert.ok(w.days.slice(0, 3).every((d) => d.beforeStart && d.share === 0));
+    L.ui.view = 'dashboard'; L.render();
+    const days = [...doc.querySelectorAll('.day')];
+    assert.equal(days[0].querySelector('.allow'), null);
+    assert.match(days[0].getAttribute('data-tip'), /Before you started/);
+    assert.match(doc.querySelector('.runway-note').textContent, /First week:\s*Rs\s?4,000\s*limit, from Thursday/);
+    assert.match(doc.querySelector('#setBudget').textContent, /Rs\s?7,000/); // the full limit is still the setting
+    // The next week is a full week.
+    assert.equal(L.weekInfo('2026-10-12').B, 7000);
+  });
+
+  test('an older entry backdated before the start date counts as the start', (t) => {
+    const { L, S, add, expenseCat, close } = makeApp('2026-10-08T10:00:00'); t.after(close);
+    S.settings.startedOn = '2026-10-08';
+    S.settings.weeklyBudget = 7000;
+    add({ type: 'expense', amount: 100, date: '2026-10-05', categoryId: expenseCat('Food').id }); // Monday
+    assert.equal(L.weekInfo().firstIdx, 0);
+    assert.equal(L.weekInfo().B, 7000);
   });
 
   test('a tiny share keeps its dashed line a little above the bottom edge', (t) => {
@@ -688,6 +717,68 @@ describe('Play Store update card (phone app)', () => {
     delete w.Capacitor; // web version
     await L.checkPlayUpdate();
     assert.equal(doc.querySelector('.update-banner'), null);
+  });
+});
+
+/* ------------------------------------------------- settings controls */
+describe('settings page controls', () => {
+  test('week start and mode are buttons; cents is a switch', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    L.ui.view = 'settings'; L.render();
+    doc.querySelector('[data-week="0"]').click();
+    assert.equal(S.settings.weekStart, 0);
+    assert.equal(doc.querySelector('[data-week="0"]').getAttribute('aria-checked'), 'true');
+    doc.querySelector('[data-mode="dark"]').click();
+    assert.equal(S.settings.theme, 'dark');
+    const cents = doc.querySelector('#sDec');
+    assert.ok(cents.classList.contains('switch'));
+    cents.checked = false; cents.onchange({ target: cents });
+    assert.equal(S.settings.decimals, false);
+  });
+});
+
+/* ------------------------------------------- accounts below zero */
+describe('spending more than an account holds', () => {
+  const openExpense = (L, doc, amount) => {
+    L.txForm({ type: 'expense' });
+    doc.querySelector('#fAmount').value = String(amount);
+    doc.querySelector('#fSave').click();
+  };
+
+  test('warns in the form; "Go back" saves nothing, "Save anyway" saves', (t) => {
+    const { L, S, doc, cash, close } = makeApp(); t.after(close);
+    cash.initial = 500;
+    openExpense(L, doc, 800);
+    assert.equal(S.transactions.length, 0);
+    assert.match(doc.querySelector('#negWarn').textContent, /This takes Cash to\s*−Rs\s?300\.00/);
+    doc.querySelector('#negBack').click();
+    assert.equal(doc.querySelector('#negWarn'), null);
+    assert.equal(S.transactions.length, 0);
+    doc.querySelector('#fSave').click();
+    doc.querySelector('#negOk').click();
+    assert.equal(S.transactions.length, 1);
+    assert.equal(L.accountBalance(cash), -300);
+  });
+
+  test('no warning when the account has enough, or can go below zero (credit card)', (t) => {
+    const { L, S, doc, cash, close } = makeApp(); t.after(close);
+    cash.initial = 1000;
+    openExpense(L, doc, 800);
+    assert.equal(S.transactions.length, 1);
+    cash.credit = true;
+    openExpense(L, doc, 5000);
+    assert.equal(doc.querySelector('#negWarn'), null);
+    assert.equal(S.transactions.length, 2);
+  });
+
+  test('editing: lowering an expense on an account that is already below zero does not warn', (t) => {
+    const { L, S, doc, cash, add, expenseCat, close } = makeApp(); t.after(close);
+    const tx = add({ type: 'expense', amount: 900, date: '2026-10-07', categoryId: expenseCat('Food').id }); // Cash: -900
+    L.txForm(tx);
+    doc.querySelector('#fAmount').value = '400';
+    doc.querySelector('#fSave').click();
+    assert.equal(doc.querySelector('#negWarn'), null);
+    assert.equal(S.transactions[0].amount, 400);
   });
 });
 
@@ -1504,6 +1595,7 @@ describe('calculator', () => {
 
   test('a sum typed in the amount box is saved as its answer', async (t) => {
     const { L, S, doc, close } = makeApp(); t.after(close);
+    L.state.accounts.forEach((a) => { a.initial = 100000; }); // money in the accounts, so no below-zero warning
     L.txForm({ type: 'expense' });
     doc.querySelector('#fAmount').value = '1200+350*2';
     doc.querySelector('#fSave').click();
@@ -1512,6 +1604,7 @@ describe('calculator', () => {
 
   test('pressing Enter in the amount box also uses the answer', (t) => {
     const { L, S, w, doc, close } = makeApp(); t.after(close);
+    L.state.accounts.forEach((a) => { a.initial = 100000; }); // money in the accounts, so no below-zero warning
     L.txForm({ type: 'expense' });
     const box = doc.querySelector('#fAmount'); box.value = '100+50';
     box.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
@@ -1543,6 +1636,7 @@ describe('calculator', () => {
 
   test('the home page calculator button opens the keypad, and its answer can become an expense', (t) => {
     const { L, S, doc, close } = makeApp(); t.after(close);
+    L.state.accounts.forEach((a) => { a.initial = 100000; }); // money in the accounts, so no below-zero warning
     L.ui.view = 'dashboard'; L.render();
     doc.querySelector('[data-calc-pad]').click();
     for (const k of ['5', '0', '0', '+', '2', '5', '0']) doc.querySelector(`#calcPad [data-k="${k}"]`).click();

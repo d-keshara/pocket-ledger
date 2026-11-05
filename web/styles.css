@@ -466,12 +466,43 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
 .stat .k { color: var(--ink-2); font-size: 13px; }
 .stat .v { font-family: var(--num); font-size: 30px; font-size: clamp(19px, 18cqi, 30px); font-weight: 600; line-height: 1.25; margin: 2px 0 1px; } /* cqi = % of the card width, so big numbers always fit */
 .stat .d { font-size: 12.5px; color: var(--muted); }
-.notify-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.notify-row label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
-.notify-row input[type="checkbox"] { margin-top: 3px; flex: none; }
-.notify-row label > span { display: flex; flex-direction: column; }
-.notify-row .hint { margin: 0; font-size: 12.5px; }
-.notify-time { width: auto; flex: none; }
+/* ---------- Settings: grouped cards with one row per setting (label left, control right), like phone settings ---------- */
+.settings { max-width: 760px; }
+.set-group { margin-top: 22px; }
+.set-group:first-child { margin-top: 4px; }
+.set-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 4px 8px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.set-title .btn { text-transform: none; letter-spacing: 0; }
+.set-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.set-card.set-pad { padding: 16px 18px; }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 16px; min-height: 54px; border-bottom: 1px solid var(--line); }
+.set-row:last-child { border-bottom: 0; }
+.set-row.set-col { flex-direction: column; align-items: stretch; gap: 10px; }
+.set-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.set-label b { font-weight: 500; font-size: 14px; }
+.set-label .hint { font-size: 12.5px; }
+.set-row > .input, .set-row > select.input { width: min(240px, 55%); flex: none; }
+.set-row > .input.set-short { width: 90px; text-align: center; }
+.set-ctrl { display: flex; align-items: center; gap: 10px; flex: none; }
+.notify-time { width: auto; flex: none; padding: 6px 8px; }
+.set-seg { flex: none; }
+.set-seg button { padding: 6px 12px; }
+.set-foot { margin: 8px 4px 0 !important; }
+.set-list { padding: 4px 16px; }
+/* Buttons that look like rows: icon, label, chevron */
+.set-action { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 16px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.set-action:last-child { border-bottom: 0; }
+.set-action > span { flex: 1; }
+.set-action svg { width: 18px; height: 18px; flex: none; color: var(--ink-2); }
+.set-action svg:last-child { width: 16px; height: 16px; color: var(--muted); }
+.set-action.danger, .set-action.danger svg { color: var(--danger); }
+@media (hover: hover) { .set-action:hover { background: var(--surface-2); } }
+/* On/off switch (a styled checkbox: still a real checkbox for keyboards and screen readers) */
+input.switch { appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 44px; height: 26px; margin: 0; border-radius: 999px; background: var(--line); cursor: pointer; transition: background .18s; }
+input.switch::before { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); transition: transform .18s; }
+input.switch:checked { background: var(--accent); }
+input.switch:checked::before { transform: translateX(18px); }
+:root[data-palette="onyx"] input.switch:checked::before { background: var(--on-accent); } /* Onyx dark: white accent, so the knob turns dark */
+input.switch:disabled { opacity: .5; cursor: default; }
 /* Home page accounts strip (under the number cards). Tiles wrap on wide screens; on phones they scroll sideways. */
 .acc-strip { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px 16px; margin-top: 18px; }
 .acc-strip h2 { font-size: 15px; margin: 0 0 10px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
@@ -504,8 +535,11 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
 .filter-toggle { display: none; }
 .filter-count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: 11px; font-weight: 700; }
 .filter-reset { font-size: 13px; }
-.summary-bar { display: flex; gap: 26px; flex-wrap: wrap; padding: 12px 0 4px; font-size: 13.5px; color: var(--ink-2); }
-.summary-bar b { font-family: var(--num); font-weight: 600; font-size: 19px; color: var(--ink); }
+/* Income · Expenses · Net: three equal columns, small label over the number. The count sits just above the list. */
+.summary-bar { display: grid; grid-template-columns: repeat(3, minmax(0, max-content)); gap: 8px 36px; padding: 12px 0 4px; font-size: 12.5px; color: var(--ink-2); }
+.summary-bar > span { display: flex; flex-direction: column; gap: 2px; line-height: 1.3; min-width: 0; }
+.summary-bar b { font-family: var(--num); font-weight: 600; font-size: 19px; color: var(--ink); white-space: nowrap; }
+.tx-count { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
 .summary-bar b.pos { color: var(--good); } .summary-bar b.neg { color: var(--danger); }
 
 /* ---------- meters ---------- */
@@ -589,6 +623,11 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
 .modal-body { padding: 18px 22px; }
 .modal-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 0 22px 20px; }
 .modal-foot .left { margin-right: auto; }
+.check-row { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.check-row input { margin-top: 3px; flex: none; }
+.check-row > span { display: flex; flex-direction: column; gap: 2px; }
+.neg-warn { margin-bottom: 14px; }
+.neg-warn .alert-actions { margin: 8px 0 6px; }
 /* "You're signed in" screen after signing in or creating an account */
 .done-panel { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 6px 0 2px; }
 .done-icon { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); margin-bottom: 6px; }
@@ -801,9 +840,8 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
   .stats { grid-template-columns: 1fr 1fr; gap: 10px; }
   .stat { padding: 14px; }
   /* Transactions totals: 2 x 2 grid, small label above each big number */
-  .summary-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
-  .summary-bar > span { display: flex; flex-direction: column; line-height: 1.3; }
-  .summary-bar > span:last-child { justify-content: flex-end; }
+  .summary-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .summary-bar b { font-size: 16px; overflow: hidden; text-overflow: ellipsis; }
   .stat .v { font-size: 22px; font-size: clamp(19px, 18cqi, 26px); }
   .acc-strip { margin-top: 10px; padding: 12px 14px 14px; }
   /* Two columns; a 3rd, 4th... account goes on the next row, so all can be read without scrolling sideways. */
