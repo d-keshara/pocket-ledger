@@ -4,9 +4,12 @@
 Pocket Ledger
 
 ## Short description (max 80)
-Know what you can spend today. A simple, private budget and expense tracker.
+100% free, no ads. Know what you can spend today with a simple budget tracker.
 
 ## Full description (max 4000)
+★ 100% FREE · NO ADS · NO SUBSCRIPTIONS · NO IN-APP PURCHASES ★
+Every feature is free for everyone. No ads, no paid upgrades, no account needed.
+
 Pocket Ledger tells you one simple thing every day: how much you can spend today and still make it to the end of the week.
 
 Set a weekly spending limit and Pocket Ledger shares it across the days that are left. Spend less today and tomorrow's share grows. Overspend and the rest of the week gets tighter. No spreadsheets, no complicated charts to decode: just one clear number.
@@ -26,7 +29,8 @@ WHAT YOU CAN DO
 PRIVATE BY DEFAULT
 • No account needed: without one, your money data stays on your phone
 • Sync only if you choose to, and delete your account and its data any time
-• No ads, no analytics, no tracking
+• Completely free: no ads, no subscriptions, no in-app purchases, no paid upgrades
+• No analytics, no tracking
 • Save a backup file whenever you like and keep it wherever you choose, such as Google Drive or your phone's storage
 • Restore a backup on a new phone in a couple of taps
 • Export your transactions as a CSV file to open in Excel or Google Sheets
@@ -40,7 +44,6 @@ BUILT FOR REAL LIFE
 Pocket Ledger is free, with no ads and no in-app purchases.
 
 Designed and developed by D. Kezara.
-
 ## Screenshots (phone, upload in this order)
 1. screenshots/1-this-week.png
 2. screenshots/2-transactions.png

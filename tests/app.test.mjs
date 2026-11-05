@@ -755,6 +755,20 @@ describe('tap a transaction to edit it', () => {
   });
 });
 
+describe('budgets: tap a budget to edit or delete it', () => {
+  test('the row opens the edit window; Delete there removes it, with Undo', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    S.budgets.push({ id: 'b1', categoryId: S.categories.find((c) => c.type === 'expense').id, amount: 9000, period: 'monthly' });
+    L.ui.view = 'budgets'; L.render();
+    doc.querySelector('[data-edit-row-budget="b1"] .bar').click();
+    assert.match(doc.querySelector('#overlay h2').textContent, /Edit budget/);
+    doc.querySelector('#bDel').click();
+    assert.equal(S.budgets.length, 0);
+    doc.querySelector('.toast button').click(); // Undo
+    assert.equal(S.budgets.length, 1);
+  });
+});
+
 /* ------------------------------------------------- settings controls */
 describe('settings page controls', () => {
   test('week start and mode are buttons; cents is a switch', (t) => {

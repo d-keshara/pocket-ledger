@@ -1164,8 +1164,10 @@ function meter(b, withActions) {
   const status = b.ratio > 1 ? `<span class="status over">${icon('alert').replace('<svg', '<svg width="14" height="14"')}Over by ${money(b.spent - b.amount)}</span>`
     : b.ratio >= .8 ? `<span class="status warn">Almost used</span>` : `<span class="status ok">On track</span>`;
   const left = b.amount - b.spent;
-  return `<div class="meter"><div class="meter-top"><span class="name"><i class="dot" style="background:${b.color || '#5f6b66'}"></i>${esc(b.name)} <span class="tag">${b.period === 'weekly' ? 'Weekly' : 'Monthly'}</span></span>
-    <span class="vals">${money(b.spent, { short: true })} / ${money(b.amount, { short: true })}${withActions ? ` <button class="icon-btn" data-edit-budget="${b.id}" aria-label="Edit">${icon('edit')}</button><button class="icon-btn" data-del-budget="${b.id}" aria-label="Delete">${icon('trash')}</button>` : ''}</span></div>
+  // On the Budgets page the whole row opens the edit window (Delete is in there too); the icons stay for mouse users.
+  const tap = withActions ? ` meter-tap" data-edit-row-budget="${b.id}" role="button" tabindex="0" aria-label="Edit ${esc(b.name)} budget` : '';
+  return `<div class="meter${tap}"><div class="meter-top"><span class="name"><i class="dot" style="background:${b.color || '#5f6b66'}"></i><span class="nm">${esc(b.name)}</span><span class="tag">${b.period === 'weekly' ? 'Weekly' : 'Monthly'}</span></span>
+    <span class="vals">${money(b.spent, { short: true })} / ${money(b.amount, { short: true })}</span>${withActions ? `<span class="meter-actions"><button class="icon-btn" data-edit-budget="${b.id}" aria-label="Edit">${icon('edit')}</button><button class="icon-btn" data-del-budget="${b.id}" aria-label="Delete">${icon('trash')}</button></span>` : ''}</div>
     <div class="bar ${cls}"><i style="width:${clamp(b.ratio * 100, 0, 100)}%"></i></div>
     <div class="meter-foot">${status}<span>${left > 0 ? `${money(left / b.daysLeft, { short: true })} a day for ${b.daysLeft} day${b.daysLeft > 1 ? 's' : ''}` : 'Nothing left this ' + (b.period === 'weekly' ? 'week' : 'month')}</span></div></div>`;
 }
@@ -1213,16 +1215,21 @@ function budgetForm(b = {}) {
     body: `<div class="stack"><label class="field"><span>Category</span><select class="input" id="bc">${catOptions('expense', b.categoryId)}</select></label>
       <div class="grid2"><label class="field"><span>Limit (${esc(state.settings.symbol)})</span><input class="input calc" id="ba" type="text" inputmode="decimal" autocomplete="off" value="${b.amount || ''}" autofocus></label>
       <label class="field"><span>Resets</span><select class="input" id="bp"><option value="weekly" ${b.period === 'weekly' ? 'selected' : ''}>Every week</option><option value="monthly" ${b.period !== 'weekly' ? 'selected' : ''}>Every month</option></select></label></div></div>`,
-    foot: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="bs">Save budget</button>',
-    onMount: (m) => $('#bs', m).onclick = () => {
+    foot: `${b.id ? `<button class="btn danger left" id="bDel">${icon('trash')}Delete</button>` : ''}<button class="btn" data-close>Cancel</button><button class="btn primary" id="bs">Save budget</button>`,
+    onMount: (m) => { $('#bDel', m) && ($('#bDel', m).onclick = () => { closeModal(); deleteBudget(b.id); }); $('#bs', m).onclick = () => {
       const amount = round2(parseFloat($('#ba', m).value));
       if (!(amount > 0)) return toast('Enter a limit greater than zero');
       const rec = { id: b.id || uid(), categoryId: $('#bc', m).value, amount, period: $('#bp', m).value };
       if (!b.id && state.budgets.some((x) => x.categoryId === rec.categoryId && x.period === rec.period)) return toast('That category already has a ' + rec.period + ' budget');
       if (b.id) Object.assign(state.budgets.find((x) => x.id === b.id), rec); else state.budgets.push(rec);
       save(); closeModal(); render(); toast('Budget saved');
-    },
+    }; },
   });
+}
+function deleteBudget(id) {
+  const i = state.budgets.findIndex((x) => x.id === id); if (i < 0) return;
+  const [gone] = state.budgets.splice(i, 1); save(); render();
+  toast('Budget removed', { label: 'Undo', run: () => { state.budgets.splice(i, 0, gone); save(); render(); } });
 }
 
 /* ---------- goals ---------- */
@@ -1464,7 +1471,7 @@ function viewSettings() {
     </div>
     <section class="about" aria-label="About">
       ${logo(44)}
-      <div class="about-text"><strong>Pocket Ledger</strong><span>Version ${APP_VERSION}</span></div>
+      <div class="about-text"><strong>Pocket Ledger</strong><span>Version ${APP_VERSION} · 100% free, no ads</span></div>
       <div class="about-credit">Designed and developed by <b>${AUTHOR}</b><span>© ${now().getFullYear()} ${AUTHOR}. All rights reserved.</span></div>
     </section>`;
 }
@@ -1805,6 +1812,7 @@ function viewWelcome() {
   const s = state.settings;
   return `<div class="welcome"><div class="welcome-inner"><div class="modal"><div class="modal-body" style="padding:30px 32px">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">${logo(40)}<div><h1>Pocket Ledger</h1><p class="muted" style="margin:0">Know what you can spend today, and make it to the end of the week.</p></div></div>
+    <div class="free-badge">${icon('check')}<b>100% free</b><span>No ads · No subscriptions · No account needed</span></div>
     ${cloud() ? `<div class="have-account">${icon('cloud')}<span>Already use Pocket Ledger on another device? <button class="link-btn" id="wSignIn" type="button">Sign in</button></span></div>` : ''}
     <div class="stack">
       <label class="field"><span>What should we call you?</span><input class="input" id="wName" placeholder="Your first name" maxlength="30" autofocus></label>
@@ -1913,7 +1921,12 @@ function bindCommon(root) {
   on('#backupLater', snoozeBackup);
   on('#addBudget, #addBudget2', () => budgetForm());
   on('[data-edit-budget]', (el) => budgetForm(state.budgets.find((b) => b.id === el.dataset.editBudget)));
-  on('[data-del-budget]', (el) => { state.budgets = state.budgets.filter((b) => b.id !== el.dataset.delBudget); save(); render(); toast('Budget removed'); });
+  on('[data-del-budget]', (el) => deleteBudget(el.dataset.delBudget));
+  $$('[data-edit-row-budget]', root).forEach((row) => {
+    const open = () => budgetForm(state.budgets.find((b) => b.id === row.dataset.editRowBudget));
+    row.onclick = (e) => { if (!e.target.closest('.meter-actions')) open(); };
+    row.onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === row) { e.preventDefault(); open(); } };
+  });
   on('#addGoal, #addGoal2', () => goalForm());
   on('[data-goal-edit]', (el) => goalForm(state.goals.find((g) => g.id === el.dataset.goalEdit)));
   on('[data-goal-add]', (el) => goalMoney(state.goals.find((g) => g.id === el.dataset.goalAdd), 1));
