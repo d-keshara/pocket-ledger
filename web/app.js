@@ -1428,6 +1428,22 @@ function syncLine(s = {}) {
   const [kind, text] = lines[s.state] || ['', 'Getting ready to sync…'];
   return `<p class="sync-line ${kind}" style="margin:0">${text}</p>`;
 }
+/* After signing in or creating an account: the same window turns into a clear "you're in" screen, with the sync
+   status updating live underneath (onCloudChange swaps the .sync-line), instead of a small message at the bottom. */
+function accountDone(created) {
+  const i = cloud()?.info() || {};
+  openModal({
+    title: created ? 'Account created' : 'Signed in',
+    body: `<div class="done-panel">
+      <span class="done-icon">${icon('check')}</span>
+      <h3>${created ? 'Your account is ready' : 'You’re signed in'}</h3>
+      <p class="done-email">${esc(i.email || '')}</p>
+      ${created ? `<p class="hint">We sent a link to this address. Open it to confirm your email (check spam too).</p>` : ''}
+      <div class="done-sync">${icon('cloudOk')}${syncLine(i.sync)}</div>
+    </div>`,
+    foot: `<button class="btn primary" data-close id="doneOk">Done</button>`,
+  });
+}
 /* Signing in to a different account than last time on this device: ask before adding this device's data to it. */
 function confirmMerge() {
   return new Promise((resolve) => {
@@ -1572,7 +1588,7 @@ function accountForm(mode) {
         if (up && password && val('cp2') !== password) fieldError(m, 'cp2', val('cp2') ? 'The two passwords don’t match.' : 'Type your password again.');
         if ($('[aria-invalid="true"]', m)) return focusFirstError(m);
         const ok = await busy(m, go, up ? 'Creating…' : 'Signing in…', () => (up ? c.signUp(email, password) : c.signIn('password', { email, password })), ids);
-        if (ok) { closeModal(); render(); toast(up ? 'Account created. Check your email to confirm it.' : 'Signed in'); } else focusFirstError(m);
+        if (ok) { render(); accountDone(up); } else focusFirstError(m);
       };
       go.onclick = run;
       bindFormBits(m, run);

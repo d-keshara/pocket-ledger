@@ -1016,15 +1016,23 @@ describe('sync & account', () => {
     doc.querySelector('#cgo').click(); await tick();
     assert.equal(doc.querySelector('#cloudHead'), null);
     assert.match(doc.querySelector('.cloud-btn.on').getAttribute('aria-label'), /me@example.com/);
+    // The form turns into a clear "you're signed in" screen with the email and the sync status; Done closes it.
+    assert.match(doc.querySelector('.done-panel').textContent, /You’re signed in/);
+    assert.match(doc.querySelector('.done-panel').textContent, /me@example.com/);
+    assert.ok(doc.querySelector('.done-panel .sync-line'));
+    doc.querySelector('#doneOk').click();
+    assert.equal(doc.querySelector('#overlay'), null);
   });
 
-  test('creating an account sends the email and password and closes the form', async (t) => {
+  test('creating an account sends the email and password and shows the "account ready" screen', async (t) => {
     const { L, w, doc, close } = makeApp(); t.after(close);
     const { calls } = fakeCloud(w);
     openForm(L, doc, '#cloudUp');
     fill(doc, { ce: ' me@example.com ', cp: 'secret123', cp2: 'secret123' });
     doc.querySelector('#cgo').click(); await tick();
     assert.deepEqual(calls[0], ['signUp', 'me@example.com', 'secret123']); // an email box drops the spaces itself
+    assert.match(doc.querySelector('.done-panel').textContent, /Your account is ready.*Open it to confirm/s);
+    doc.querySelector('#doneOk').click();
     assert.equal(doc.querySelector('#overlay'), null);
     assert.match(doc.body.textContent, /me@example.com/);
     assert.doesNotMatch(doc.body.textContent, /Your data never leaves your device/);

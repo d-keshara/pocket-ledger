@@ -578,6 +578,14 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
 .modal-body { padding: 18px 22px; }
 .modal-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 0 22px 20px; }
 .modal-foot .left { margin-right: auto; }
+/* "You're signed in" screen after signing in or creating an account */
+.done-panel { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 6px 0 2px; }
+.done-icon { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); margin-bottom: 6px; }
+.done-icon svg { width: 28px; height: 28px; stroke-width: 2.5; }
+.done-panel h3 { margin: 0; font-size: 18px; }
+.done-email { margin: 0; color: var(--ink-2); font-weight: 600; word-break: break-all; }
+.done-sync { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 10px 14px; border-radius: 10px; background: var(--surface-2); text-align: left; font-size: 13px; }
+.done-sync svg { width: 18px; height: 18px; flex: none; color: var(--accent); }
 @keyframes fade { from { opacity: 0; } }
 @keyframes rise { from { opacity: 0; transform: translateY(10px) scale(.98); } }
 
