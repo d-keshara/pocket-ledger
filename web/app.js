@@ -764,15 +764,24 @@ function closeCalcPad() {
 /* Money tools (the Calculator page). Plain sums, kept apart so the tests can check them. */
 const toolMath = {
   discount: (price, pct) => { const off = round2(price * pct / 100); return { off, pay: round2(price - off) }; },
-  split: (total, people, extraPct = 0) => { const all = round2(total * (1 + extraPct / 100)); return { all, each: round2(all / people) }; },
+  // Shares are in whole cents: 1,000 / 3 = 333.33 each, and the leftover cent goes to one person (333.34), so they add up.
+  split: (total, people, extraPct = 0) => {
+    const all = round2(total * (1 + extraPct / 100));
+    const cents = Math.round(all * 100); const each = Math.floor(cents / people) / 100; const extra = cents % people;
+    return { all, each, extra, last: round2(each + extra / 100) };
+  },
   // Monthly payment of a loan or lease: amount × r / (1 − (1 + r)^−months), r = yearly rate ÷ 12.
   loan: (amount, yearRate, months) => {
-    const r = yearRate / 1200; const pay = r ? amount * r / (1 - Math.pow(1 + r, -months)) : amount / months;
-    return { monthly: round2(pay), total: round2(pay * months), interest: round2(pay * months - amount) };
+    const r = yearRate / 1200; const monthly = round2(r ? amount * r / (1 - Math.pow(1 + r, -months)) : amount / months);
+    // Totals from the rounded monthly payment, so "each month x months" matches "you pay back".
+    const total = round2(monthly * months);
+    return { monthly, total, interest: round2(total - amount) };
   },
+  // Whole weeks / months you can still save in (10 days = 2 weekly payments), so the amounts really add up to the target.
   saving: (target, saved, days) => {
     const left = round2(Math.max(0, target - saved));
-    return { left, perWeek: round2(left / Math.max(1, days / 7)), perMonth: round2(left / Math.max(1, days / 30.4375)) };
+    const weeks = Math.max(1, Math.ceil(days / 7)), months = Math.max(1, Math.ceil(days / 30.4375));
+    return { left, weeks, months, perWeek: round2(Math.ceil(left / weeks * 100) / 100), perMonth: round2(Math.ceil(left / months * 100) / 100) };
   },
 };
 const TOOLS = [
@@ -788,14 +797,17 @@ function toolResult(tool) {
   const wait = (text) => `<p class="hint">${text}</p>`;
   if (tool === 'discount') {
     if (!(n('price') > 0) || n('pct') === null) return wait('Enter a price and a percentage.');
+    if (n('pct') < 0 || n('pct') > 100) return wait('The discount must be between 0 and 100%.');
     const r = toolMath.discount(n('price'), n('pct'));
     return row('You save', r.off) + row('You pay', r.pay, true) + `<button class="btn small" data-tool-add="${r.pay}">${icon('plus')}Add as expense</button>`;
   }
   if (tool === 'split') {
     const people = Math.round(n('people') || 0);
     if (!(n('total') > 0) || people < 1) return wait('Enter the bill total and how many people.');
+    if ((n('extra') || 0) < 0) return wait('The service charge or tip can’t be below 0%.');
     const r = toolMath.split(n('total'), people, n('extra') || 0);
-    return row('Total to pay', r.all) + row('Each person pays', r.each, true) + `<button class="btn small" data-tool-add="${r.each}">${icon('plus')}Add my share as expense</button>`;
+    return row('Total to pay', r.all) + row('Each person pays', r.each, true)
+      + (r.extra ? `<p class="hint">${r.extra === 1 ? 'One person pays' : `${r.extra} people pay`} ${esc(money(r.last))}, so it adds up to ${esc(money(r.all))}.</p>` : '') + `<button class="btn small" data-tool-add="${r.each}">${icon('plus')}Add my share as expense</button>`;
   }
   if (tool === 'loan') {
     const months = Math.round(n('months') || 0);
@@ -809,7 +821,7 @@ function toolResult(tool) {
     if (days < 1) return wait('Pick a date after today.');
     const r = toolMath.saving(n('target'), n('saved') || 0, days);
     if (!r.left) return wait('You already have enough. Well done!');
-    return row('Still needed', r.left) + row('Put aside each week', r.perWeek, true) + row('or each month', r.perMonth)
+    return row('Still needed', r.left) + row(`Put aside each week (${plural(r.weeks, 'week')})`, r.perWeek, true) + row(`or each month (${plural(r.months, 'month')})`, r.perMonth)
       + `<button class="btn small" data-tool-goal="${n('target')}" data-tool-saved="${n('saved') || 0}" data-tool-date="${esc(v.date)}">${icon('flag')}Make it a savings goal</button>`;
   }
   return '';

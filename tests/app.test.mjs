@@ -1702,11 +1702,39 @@ describe('calculator', () => {
     const { L, close } = makeApp(); t.after(close);
     const m = L.toolMath;
     assert.deepEqual({ ...m.discount(2500, 20) }, { off: 500, pay: 2000 });
-    assert.deepEqual({ ...m.split(3000, 4, 10) }, { all: 3300, each: 825 });
+    assert.deepEqual({ ...m.split(3000, 4, 10) }, { all: 3300, each: 825, extra: 0, last: 825 });
     const loan = m.loan(100000, 12, 12);
     assert.equal(loan.monthly, 8884.88);
     assert.equal(m.loan(1200, 0, 12).monthly, 100, 'no interest: just divided');
-    assert.deepEqual({ ...m.saving(10000, 2000, 56) }, { left: 8000, perWeek: 1000, perMonth: round(8000 / (56 / 30.4375)) });
+    assert.deepEqual({ ...m.saving(10000, 2000, 56) }, { left: 8000, weeks: 8, months: 2, perWeek: 1000, perMonth: 4000 });
+  });
+
+  test('money tools add up: split cents, loan totals, whole weeks for saving', (t) => {
+    const { L, close } = makeApp(); t.after(close);
+    const m = L.toolMath;
+    const s3 = m.split(1000, 3);
+    assert.equal(s3.each, 333.33); assert.equal(s3.extra, 1); assert.equal(s3.last, 333.34); // 333.33 + 333.33 + 333.34
+    assert.equal(m.split(4500, 4, 10).each, 1237.5);
+    assert.equal(m.split(4500, 4, 10).extra, 0);
+    const loan = m.loan(100000, 12, 24);
+    assert.equal(loan.monthly, 4707.35);                       // same as a bank's monthly payment
+    assert.equal(loan.total, round(4707.35 * 24));             // 112,976.40: each month x months
+    assert.equal(loan.interest, round(loan.total - 100000));
+    const sv = m.saving(60000, 0, 10);                         // 10 days = 2 weekly payments
+    assert.equal(sv.weeks, 2); assert.equal(sv.perWeek, 30000);
+    assert.ok(sv.perWeek * sv.weeks >= 60000);
+  });
+
+  test('a discount over 100% or a negative tip is refused, not shown as a negative amount', (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    L.ui.view = 'tools'; L.render();
+    const set = (tool, f, v) => { const i = doc.querySelector(`[data-tool="${tool}"][data-f="${f}"]`); i.value = v; i.dispatchEvent(new w.Event('input', { bubbles: true })); };
+    set('discount', 'price', '2500'); set('discount', 'pct', '120');
+    assert.match(doc.querySelector('#out-discount').textContent, /between 0 and 100%/);
+    set('split', 'total', '1000'); set('split', 'people', '3');
+    assert.match(doc.querySelector('#out-split').textContent, /One person pays Rs\s?333\.34/);
+    set('split', 'extra', '-5');
+    assert.match(doc.querySelector('#out-split').textContent, /can’t be below 0%/);
   });
 
   test('the Calculator page works out a tool as you type', (t) => {
