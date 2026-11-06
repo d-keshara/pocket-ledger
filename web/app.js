@@ -601,13 +601,14 @@ function drawBarChart(groups, { height = 220, width = 640 } = {}) {
   s += `<line class="baseline" x1="${L}" x2="${W - R}" y1="${T + ih}" y2="${T + ih}"/></svg>`;
   return s;
 }
-function hbars(rows, total) {
+/* note: optional small grey line under a category's name (e.g. "Not in weekly limit"), also added to its tooltip. */
+function hbars(rows, total, note = () => '') {
   if (!rows.length) return '';
   const max = Math.max(...rows.map((r) => r.v));
-  return `<div class="hbars">${rows.map((r) => `<div class="hbar" data-tip="${esc(`${esc(r.name)}<br><b>${esc(money(r.v))}</b> · ${total ? Math.round(r.v / total * 100) : 0}% of spending${r.n ? `<br>${r.n} transaction${r.n > 1 ? 's' : ''}` : ''}`)}">
-    <div class="lbl"><i class="dot" style="background:${r.color}"></i>${esc(r.name)}</div>
+  return `<div class="hbars">${rows.map((r) => { const n = note(r); return `<div class="hbar" data-tip="${esc(`${esc(r.name)}<br><b>${esc(money(r.v))}</b> · ${total ? Math.round(r.v / total * 100) : 0}% of spending${r.n ? `<br>${r.n} transaction${r.n > 1 ? 's' : ''}` : ''}${n ? `<br>${esc(n)}` : ''}`)}">
+    <div class="lbl"><i class="dot" style="background:${r.color}"></i><span class="lbl-txt">${esc(r.name)}${n ? `<small>${esc(n)}</small>` : ''}</span></div>
     <div class="track"><i style="width:${(r.v / max) * 100}%"></i></div>
-    <div class="v">${moneyHtml(r.v, { short: true })}<small>${total ? Math.round(r.v / total * 100) : 0}%</small></div></div>`).join('')}</div>`;
+    <div class="v">${moneyHtml(r.v, { short: true })}<small>${total ? Math.round(r.v / total * 100) : 0}%</small></div></div>`; }).join('')}</div>`;
 }
 function categoryRows(list) {
   const by = {};
@@ -944,10 +945,14 @@ function viewDashboard() {
       ${w.B ? `<div class="share" title="Daily share">${d.beforeStart ? '&nbsp;' : hasShare ? moneyHtml(allowance, { short: true }) : '–'}</div>` : ''}</div>`;
   }).join('');
   const diff = w.spent - lastWSamePoint;
+  // Spending this week in categories left out of the limit (Bills & utilities, rent): said here, so the bars and
+  // "Where this week's money went" (which shows everything) don't look like they disagree.
+  const notCounted = round2(sum(expensesIn(w.start, t).filter((x) => !w.counted(x)), (x) => x.amount));
   const chip = (html, cls = '') => `<span class="chip ${cls}">${html}</span>`;
   const notes = `<div class="runway-note">
     ${w.B && w.remaining > 0 ? chip(w.remaining >= 0 ? `<b>${money(w.remaining, { short: true })}</b> left this week` : `<b>${money(-w.remaining, { short: true })}</b> over this week`, w.remaining >= 0 ? '' : 'neg') : ''}
     ${w.B && w.firstIdx ? chip(`First week: <b>${money(w.B, { short: true })}</b> limit, from ${DAY_LONG[parseISO(addDays(w.start, w.firstIdx)).getDay()]}`) : ''}
+    ${w.B && notCounted ? chip(`<b>${money(notCounted, { short: true })}</b> fixed costs, not in limit`) : ''}
     ${w.planned ? chip(`<b>${money(w.planned, { short: true })}</b> planned later this week`, w.B && w.planned > w.remaining ? 'neg' : '') : ''}
     ${spentSoFar ? chip(`On pace for <b>${money(projected, { short: true })}</b>`, w.B && projected > w.B ? 'neg' : '') : ''}
     ${round2(diff) ? chip(`<b>${money(diff, { sign: true, short: true })}</b> vs last week`, diff > 0 ? 'neg' : 'pos') : ''}
@@ -978,7 +983,7 @@ function viewDashboard() {
     ${accountStrip()}
     <div class="cols">
       <div class="panel"><h2>Where this week’s money went <small>${money(sum(weekEx, (x) => x.amount))}</small></h2>
-        ${weekEx.length ? hbars(categoryRows(weekEx), sum(weekEx, (x) => x.amount)) : empty('chart', 'Nothing spent yet this week', 'Log each expense as it happens. Press N to add one quickly.')}</div>
+        ${weekEx.length ? hbars(categoryRows(weekEx), sum(weekEx, (x) => x.amount), (r) => w.B && cat(r.id)?.weekly === false ? 'Not in weekly limit' : '') : empty('chart', 'Nothing spent yet this week', 'Log each expense as it happens. Press N to add one quickly.')}</div>
       <div class="panel"><h2>Recent <button class="btn small ghost" data-go="transactions">See all</button></h2>
         ${recent.length ? `<div class="tx-list">${recent.map(txRow).join('')}</div>` : empty('list', 'No transactions yet', 'Your latest income and spending will show here.', `<button class="btn primary" data-add="expense">${icon('plus')}Add your first expense</button>`)}</div>
     </div>
