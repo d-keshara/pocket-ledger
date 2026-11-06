@@ -63,7 +63,12 @@ Designed and developed by D. Kezara.
 - Web version: https://d-keshara.github.io/pocket-ledger/
 - Delete account (Play Console > App content > Data safety > "Delete account URL"): https://d-keshara.github.io/pocket-ledger/account.html?mode=deleteAccount
 
-## What's new in 1.9.4 (release notes, max 500)
+## What's new in 1.9.5 (release notes, max 500)
+New: the home page now shows how much went on fixed costs like bills, which don't count toward your weekly limit.
+New: "Not in weekly limit" label under those categories in "Where this week's money went".
+Better: budgets show as tidy one-line rows; tap one to edit or delete it.
+
+## What's new in 1.9.4, kept for reference (release notes, max 500)
 New: clearer home page. Left to spend stops at Rs 0 with a red "over" badge; spent above each bar, daily share below.
 New: Upcoming list for future-dated payments, counted only on their date.
 New: warning before an account goes below zero; credit cards can.
