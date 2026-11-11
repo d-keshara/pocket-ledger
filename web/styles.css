@@ -1224,7 +1224,8 @@ input.switch:disabled { opacity: .5; cursor: default; }
 .round-btn svg { width: 20px; height: 20px; }
 
 /* The dark card: Home "You can spend today", Spending "You spent" */
-.hero { display: grid; gap: 4px; padding: 22px 22px 18px; border-radius: 28px; background: linear-gradient(135deg, #34347a 0%, #6a4aa0 52%, #c0607e 100%); color: #ffffff; box-shadow: 0 14px 30px rgba(74, 52, 140, .28); }
+/* Home: deep blue. Spending (.page > .hero, below): teal to violet */
+.hero { display: grid; gap: 4px; padding: 22px 22px 18px; border-radius: 28px; background: linear-gradient(135deg, #12245e 0%, #1f3f9a 55%, #3f62d4 100%); color: #ffffff; box-shadow: 0 14px 30px rgba(31, 63, 154, .3); }
 .page > .hero { background: linear-gradient(135deg, #1d5d73 0%, #3d4b9a 55%, #7a4a9e 100%); box-shadow: 0 14px 30px rgba(45, 75, 140, .26); } /* Spending: its own colours */
 .hero-k { font-size: 15px; font-weight: 600; color: rgba(255, 255, 255, .78); }
 .hero-v { font-family: var(--num); font-size: 50px; font-weight: 600; line-height: 1.05; letter-spacing: -.01em; --minor: .5em; }
@@ -1261,17 +1262,19 @@ input.switch:disabled { opacity: .5; cursor: default; }
   text-align: center; font-family: var(--num); font-size: 40px; font-weight: 600; height: auto; padding: 6px 44px;
   border: 0; border-bottom: 2px solid var(--line); border-radius: 0; background: transparent; box-shadow: none;
 }
+/* The add form keeps the same height when switching Expense / Income / Transfer, so it doesn't jump up and down */
+[data-style="aesthetic"] .modal:has(#typeSeg) { min-height: min(760px, calc(100vh - 40px)); }
 [data-style="aesthetic"] #fCats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 6px; }
 [data-style="aesthetic"] #fCats .chip {
   flex-direction: column; justify-content: flex-start; gap: 6px; padding: 0; border: 0; border-radius: 0; background: none;
-  font-size: 12px; line-height: 1.2; text-align: center; white-space: normal;
+  font-size: 12px; line-height: 1.2; text-align: center; white-space: normal; min-height: 89px; /* icon + two lines, so rows never change height */
 }
 [data-style="aesthetic"] #fCats .chip .dot {
   width: 54px; height: 54px; flex: none; border-radius: 50%; display: grid; place-items: center;
   background: color-mix(in srgb, var(--c) 16%, var(--surface)) !important; color: var(--c); box-shadow: inset 0 0 0 3px transparent;
 }
 [data-style="aesthetic"] #fCats .chip .dot .cat-ic { display: block; width: 22px; height: 22px; }
-[data-style="aesthetic"] #fCats .chip.on { background: none; font-weight: 700; }
+[data-style="aesthetic"] #fCats .chip.on { background: none; color: var(--ink); } /* not bold: a wider name could take a new line and make the form jump */
 [data-style="aesthetic"] #fCats .chip.on .dot { box-shadow: inset 0 0 0 3px var(--ink); }
 
 /* Spending: period pills and the "You kept" card */
@@ -1387,7 +1390,7 @@ input.switch:disabled { opacity: .5; cursor: default; }
   [data-style="aesthetic"] .nav button { color: var(--muted); border-radius: 999px; }
   [data-style="aesthetic"] .nav button.on { background: none; color: var(--ink); }
   [data-style="aesthetic"] .nav button.on span { display: none; } /* the dark circle says "you are here" */
-  [data-style="aesthetic"] .nav button.on svg { width: 22px; height: 22px; padding: 13px; margin: -6px 0; box-sizing: content-box; border-radius: 50%; background: linear-gradient(135deg, #34347a 0%, #6a4aa0 52%, #c0607e 100%); color: #ffffff; }
+  [data-style="aesthetic"] .nav button.on svg { width: 22px; height: 22px; padding: 13px; margin: -6px 0; box-sizing: content-box; border-radius: 50%; background: linear-gradient(135deg, #12245e 0%, #1f3f9a 55%, #3f62d4 100%); color: #ffffff; }
   [data-style="aesthetic"] .nav-add {
     display: grid; place-items: center; flex: 0 0 52px; width: 52px; height: 52px; align-self: center; margin: 0 2px;
     border: 0; border-radius: 50%; background: var(--accent-soft); color: var(--ink); cursor: pointer;
@@ -1410,6 +1413,7 @@ input.switch:disabled { opacity: .5; cursor: default; }
   [data-style="aesthetic"] .fab-item.calc .fab-ic { --q: #c98a14; }
   [data-style="aesthetic"] .fab-label { color: var(--ink); text-shadow: none; font-weight: 700; }
   [data-style="aesthetic"] .wdot-c { width: 38px; height: 38px; }
+  [data-style="aesthetic"] .modal:has(#typeSeg) { height: 92vh; min-height: 0; } /* the add form always as tall as a sheet can be: its top never moves */
 }
 
 /* Reports in the Aesthetic look: spending by category as a colourful ring, the total in the middle */

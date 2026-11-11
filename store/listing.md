@@ -16,6 +16,8 @@ Set a weekly spending limit and Pocket Ledger shares it across the days that are
 
 WHAT YOU CAN DO
 • See what you can spend today at a glance, with today's income and expenses and a day-by-day bar chart of your week
+• Calendar: see every day's spending, your bills, payday and goal dates at a glance, how many days to payday and how much you can spend each day until then, and a warning before money runs short
+• Add your own reminders (school fees, insurance renewal) with an optional amount, and get a notification on the day
 • Add income and expenses in seconds, with categories, notes and accounts (cash, bank and more)
 • Set monthly or weekly budgets for each category and see which ones are on track
 • Save towards goals like an emergency fund, a new laptop or a trip, with a weekly target to reach them in time
@@ -23,7 +25,9 @@ WHAT YOU CAN DO
 • See reports: income vs. expenses by month, spending by category, your biggest expenses and your savings rate
 • Search and filter every transaction by date, type, category or account
 • Built-in calculator: type sums like 1200+350 in any amount, or work out discounts, bill splits, loan payments and how much to save each week
-• Choose your currency (LKR, USD, EUR, GBP, INR, AUD and many more), your first day of the week, light or dark mode, and a colour theme: Forest, Onyx, Navy or Mocha
+• Two styles: Professional, simple and clear, or Aesthetic, a soft, colourful planner look with handwritten titles and an easy circle chart of your spending
+• Choose your currency (LKR, USD, EUR, GBP, INR, AUD and many more), your first day of the week, light or dark mode, and a colour theme: Forest, Onyx, Navy, Mocha or Pearl
+• Send ideas or report a problem right from Settings
 • Optional sync: create a free account to use the same data on your phone and computer, updated live
 
 PRIVATE BY DEFAULT
@@ -45,14 +49,15 @@ Pocket Ledger is free, with no ads and no in-app purchases.
 
 Designed and developed by D. Kezara.
 ## Screenshots (phone, upload in this order)
+Made by `node tools/store-screenshots.mjs` (sample data, 1080 x 2160).
 1. screenshots/1-this-week.png
-2. screenshots/2-transactions.png
-3. screenshots/3-budgets.png
-4. screenshots/4-reports.png
-5. screenshots/5-spending-by-category.png
+2. screenshots/2-calendar.png
+3. screenshots/3-aesthetic-home.png
+4. screenshots/4-spending-chart.png
+5. screenshots/5-add-expense.png
 6. screenshots/6-savings-goals.png
 7. screenshots/7-dark-mode.png
-8. screenshots/8-settings.png
+8. screenshots/8-transactions.png
 
 ## Graphics
 - App icon (512 x 512): icon-512.png
@@ -63,7 +68,7 @@ Designed and developed by D. Kezara.
 - Web version: https://d-keshara.github.io/pocket-ledger/
 - Delete account (Play Console > App content > Data safety > "Delete account URL"): https://d-keshara.github.io/pocket-ledger/account.html?mode=deleteAccount
 
-## What's new in 1.9.7 (release notes, max 500; 1.9.6 never went to Play, so these cover both)
+## What's new in 1.9.8 (release notes, max 500; 1.9.6 and 1.9.7 never went to Play, so these cover all three)
 New: Calendar page with your bills, payday countdown, goal dates and your own reminders, with a warning if money may run short.
 New: Aesthetic style, a soft, colourful planner look with a spending circle chart. Choose it in Settings → Style.
 New: send an idea or report a problem from Settings → Feedback.

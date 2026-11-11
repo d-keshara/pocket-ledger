@@ -3,7 +3,7 @@
 'use strict';
 
 /* ================= constants ================= */
-const APP_VERSION = '1.9.7';
+const APP_VERSION = '1.9.8';
 const AUTHOR = 'D. Kezara';
 const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948', '#5f6b66', '#0f6b5c'];
 const CURRENCIES = [
@@ -1897,7 +1897,7 @@ function viewSettings() {
         ${action('fbIdea', 'mail', 'Send an idea or feedback')}
         ${action('fbProblem', 'alert', 'Report a problem')}
         ${isNativeApp() ? action('rateApp', 'star', 'Rate on Google Play') : ''}
-      </div><p class="hint set-foot">Every message is read by the developer. Ideas often become new features.</p></section>
+      </div></section>
       <section class="set-group"><h2 class="set-title">Expense categories <button class="btn small" data-cat-add="expense">${icon('plus')}Add</button></h2><div class="set-card set-list">${catList('expense')}</div></section>
       <section class="set-group"><h2 class="set-title">Income categories <button class="btn small" data-cat-add="income">${icon('plus')}Add</button></h2><div class="set-card set-list">${catList('income')}</div></section>
     </div>
