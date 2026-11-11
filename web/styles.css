@@ -441,6 +441,8 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
 .cloud-btn { border-radius: 999px; }
 /* Home: a round Settings button beside the cloud, so Settings is one tap away */
 .btn.set-btn { width: 40px; height: 40px; padding: 0; border-radius: 50%; flex: none; }
+.tools-row { display: flex; gap: 8px; align-items: center; }
+.greet-name { display: block; } /* the name on its own line under "Good evening," */
 .btn.set-btn svg { width: 19px; height: 19px; }
 .cloud-btn.on svg { color: var(--good); }
 .cloud-btn.on.warn svg { color: var(--warn); }
@@ -448,6 +450,12 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
 .have-account { display: flex; gap: 10px; align-items: center; font-size: 13px; color: var(--ink-2); background: var(--surface-2);
   border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: -4px 0 18px; }
 .have-account > svg { width: 18px; height: 18px; flex: none; color: var(--accent); }
+/* Create a free account (a button) on the left, "Have an account? Sign in" on the right, so they don't look alike */
+.have-account { align-items: flex-start; }
+.have-account > span { flex: 1; min-width: 0; } /* the words and both links beside the cloud */
+.have-account > svg { margin-top: 2px; }
+.have-account-links { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-top: 10px; width: 100%; }
+.have-account-links .muted { font-size: 13px; }
 .sync-line.ok { color: var(--good); }
 .sync-line.bad { color: var(--danger); }
 
@@ -530,11 +538,13 @@ input::-ms-reveal, input::-ms-clear { display: none; } /* Edge's own eye button:
 .day .col .fill.planned { opacity: .45; } /* expenses already dated on a future day */
 /* Onyx: the bars are black or white, the same as a grey line would fade into. Dashes in two colours
    (text colour, then card colour) stay visible on the empty track and on a filled bar. */
-:root[data-palette="onyx"] .day .col .allow {
-  border-top: 0; height: 2px; opacity: 1;
-  background: repeating-linear-gradient(90deg, var(--ink) 0 5px, var(--surface) 5px 9px);
+/* The day's share: short soft dashes with clear gaps, one colour in every theme. The faint halo keeps it visible on a
+   filled bar of a similar colour (Onyx's black bars), without hard black-and-white blocks (the old Onyx line). */
+.day .col .allow {
+  position: absolute; left: 6px; right: 6px; height: 2px; border-radius: 2px;
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink) 62%, transparent) 0 6px, transparent 6px 10px);
+  filter: drop-shadow(0 0 1px color-mix(in srgb, var(--surface) 85%, transparent));
 }
-.day .col .allow { position: absolute; left: 6px; right: 6px; border-top: 2px dashed var(--muted); opacity: .7; }
 .day.future .col { background: repeating-linear-gradient(135deg, var(--surface-2) 0 6px, transparent 6px 10px); outline: 1px solid var(--line); outline-offset: -1px; }
 .day.today .col { outline: 2px solid var(--accent); outline-offset: 2px; }
 .day .amt { font-family: var(--num); font-size: 14px; font-weight: 600; white-space: nowrap; }
@@ -993,8 +1003,8 @@ input.switch:disabled { opacity: .5; cursor: default; }
   .home-head .head-title { flex-basis: 0; }            /* share the first row with the switch... */
   .home-head .head-tools { align-self: flex-start; }    /* ...which sits top-right, beside the greeting */
   .cloud-btn { width: 40px; height: 40px; padding: 0; justify-content: center; } /* icon only on phones, as tall as the theme switch */
-  /* Phones: the light/dark switch lives in Settings → Mode (the ⚙ beside the cloud), so the greeting keeps its room */
-  .home-head .theme-toggle { display: none; }
+  /* Home: the round buttons in a row, the light/dark switch under them, so the greeting keeps its room */
+  .home-head .head-tools { flex-direction: column; align-items: flex-end; gap: 8px; }
   .cloud-btn span { display: none; }
   /* Toasts sit above the + button instead of covering (and blocking taps on) the tab bar */
   .toast-wrap { bottom: calc(var(--bar-gap) + 146px); width: max-content; max-width: calc(100% - 32px); }
@@ -1202,9 +1212,11 @@ input.switch:disabled { opacity: .5; cursor: default; }
 [data-style="aesthetic"] .mini { border-radius: 16px; }
 
 /* ---- The Aesthetic screens (app.js: viewHomeAes, and the Aesthetic parts of Reports, Goals, Settings, the add form) ---- */
-.nav-add { display: none; }
-.home-aes, .goals-aes { display: grid; gap: 16px; max-width: 680px; }
-[data-style="aesthetic"] .page > :is(.hero, .aes-card, .kept) { max-width: 680px; margin-bottom: 16px; }
+.nav .nav-add { display: none; } /* only the phone bar has the + (".nav button" would show it in the computer sidebar) */
+/* Aesthetic on a computer: one centred column, like a planner page, instead of a narrow strip on the left */
+[data-style="aesthetic"] .page { max-width: 860px; }
+.home-aes, .goals-aes { display: grid; gap: 16px; }
+[data-style="aesthetic"] .page > :is(.hero, .aes-card, .kept) { margin-bottom: 16px; }
 .aes-card { background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 18px; }
 .aes-h { margin: 0 0 12px; font-family: var(--num); font-size: 18px; font-weight: 600; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
 .aes-h .link-btn { font-family: var(--body); font-size: 14px; font-weight: 700; }
@@ -1212,11 +1224,12 @@ input.switch:disabled { opacity: .5; cursor: default; }
 .round-btn svg { width: 20px; height: 20px; }
 
 /* The dark card: Home "You can spend today", Spending "You spent" */
-.hero { display: grid; gap: 4px; padding: 22px 22px 18px; border-radius: 28px; background: var(--hero, var(--side)); color: #ffffff; box-shadow: 0 14px 30px rgba(20, 18, 28, .18); }
+.hero { display: grid; gap: 4px; padding: 22px 22px 18px; border-radius: 28px; background: linear-gradient(135deg, #34347a 0%, #6a4aa0 52%, #c0607e 100%); color: #ffffff; box-shadow: 0 14px 30px rgba(74, 52, 140, .28); }
+.page > .hero { background: linear-gradient(135deg, #1d5d73 0%, #3d4b9a 55%, #7a4a9e 100%); box-shadow: 0 14px 30px rgba(45, 75, 140, .26); } /* Spending: its own colours */
 .hero-k { font-size: 15px; font-weight: 600; color: rgba(255, 255, 255, .78); }
 .hero-v { font-family: var(--num); font-size: 50px; font-weight: 600; line-height: 1.05; letter-spacing: -.01em; --minor: .5em; }
 .hero-s { font-size: 14px; color: rgba(255, 255, 255, .75); }
-.hero-over { color: #f7a9a0; }
+.hero-over { color: #ffd3cb; }
 .hero-bar { height: 10px; border-radius: 99px; background: rgba(255, 255, 255, .14); margin-top: 12px; overflow: hidden; }
 .hero-bar i { display: block; height: 100%; border-radius: 99px; background: #9be3bc; }
 .hero-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; color: rgba(255, 255, 255, .75); margin-top: 4px; }
@@ -1227,8 +1240,12 @@ input.switch:disabled { opacity: .5; cursor: default; }
 /* Home: Expense · Income · Move money */
 .qa { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .qa-tile { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 4px 12px; border-radius: 22px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 14px; font-weight: 700; cursor: pointer; }
-.qa-ic { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; background: var(--ink); color: var(--surface); }
-.qa-ic svg { width: 18px; height: 18px; }
+.qa-ic { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; --q: var(--ink); background: color-mix(in srgb, var(--q) 16%, var(--surface)); color: var(--q); }
+.qa-tile[data-fab="expense"] { --q: #e0607a; }
+.qa-tile[data-fab="income"] { --q: #2e9d6c; }
+.qa-tile[data-fab="transfer"] { --q: #7b61d9; }
+.qa-tile .qa-ic { --q: inherit; }
+.qa-ic svg { width: 20px; height: 20px; stroke-width: 2.4; }
 
 /* Category icons: Professional shows the letter, Aesthetic the icon on a soft tint of the category's colour */
 .cat-ic { display: none; }
@@ -1370,7 +1387,7 @@ input.switch:disabled { opacity: .5; cursor: default; }
   [data-style="aesthetic"] .nav button { color: var(--muted); border-radius: 999px; }
   [data-style="aesthetic"] .nav button.on { background: none; color: var(--ink); }
   [data-style="aesthetic"] .nav button.on span { display: none; } /* the dark circle says "you are here" */
-  [data-style="aesthetic"] .nav button.on svg { width: 22px; height: 22px; padding: 13px; margin: -6px 0; box-sizing: content-box; border-radius: 50%; background: var(--ink); color: var(--surface); }
+  [data-style="aesthetic"] .nav button.on svg { width: 22px; height: 22px; padding: 13px; margin: -6px 0; box-sizing: content-box; border-radius: 50%; background: linear-gradient(135deg, #34347a 0%, #6a4aa0 52%, #c0607e 100%); color: #ffffff; }
   [data-style="aesthetic"] .nav-add {
     display: grid; place-items: center; flex: 0 0 52px; width: 52px; height: 52px; align-self: center; margin: 0 2px;
     border: 0; border-radius: 50%; background: var(--accent-soft); color: var(--ink); cursor: pointer;
@@ -1380,6 +1397,18 @@ input.switch:disabled { opacity: .5; cursor: default; }
   [data-style="aesthetic"] .side { position: relative; z-index: 43; } /* above the dimmed page, so the + still closes the fan */
   [data-style="aesthetic"] .fab { display: none; }                       /* the + lives in the bar */
   [data-style="aesthetic"] .fab-item { right: auto; left: calc(50% - 26px); bottom: calc(var(--bar-gap) + 9px); }
+  [data-style="aesthetic"] .fab-wrap::after {
+    content: ''; position: fixed; left: 16px; right: 16px; bottom: calc(var(--bar-gap) + 82px); height: 108px; z-index: 41;
+    border-radius: 28px; background: var(--surface); box-shadow: 0 16px 40px rgba(20, 18, 28, .22);
+    opacity: 0; transform: translateY(12px) scale(.98); pointer-events: none; transition: opacity .18s, transform .18s;
+  }
+  [data-style="aesthetic"] .fab-wrap.open::after { opacity: 1; transform: none; }
+  [data-style="aesthetic"] .fab-ic { --q: var(--ink); border: 0; box-shadow: none; background: color-mix(in srgb, var(--q) 16%, var(--surface)); color: var(--q); }
+  [data-style="aesthetic"] .fab-item.expense .fab-ic { --q: #e0607a; }
+  [data-style="aesthetic"] .fab-item.income .fab-ic { --q: #2e9d6c; }
+  [data-style="aesthetic"] .fab-item.transfer .fab-ic { --q: #7b61d9; }
+  [data-style="aesthetic"] .fab-item.calc .fab-ic { --q: #c98a14; }
+  [data-style="aesthetic"] .fab-label { color: var(--ink); text-shadow: none; font-weight: 700; }
   [data-style="aesthetic"] .wdot-c { width: 38px; height: 38px; }
 }
 

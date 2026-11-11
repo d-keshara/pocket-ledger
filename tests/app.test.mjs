@@ -2241,23 +2241,32 @@ describe('style: Professional or Aesthetic', () => {
     assert.equal(doc.querySelector('.wdots'), null, 'the week is bars');
   });
 
-  test('the welcome screen offers both looks; picking Aesthetic shows it at once and keeps what was typed', (t) => {
+  test('the welcome form has no style picker; after Start tracking a popup asks for one (Professional recommended)', (t) => {
     const { L, S, doc, close } = makeApp(); t.after(close);
     S.settings.onboarded = false; L.render();
-    const cards = doc.querySelectorAll('[data-style-pick]');
+    assert.equal(doc.querySelector('.welcome [data-style-pick]'), null, 'not on the form');
+    doc.querySelector('#wName').value = 'Kezara';
+    doc.querySelector('#wGo').click();
+    const cards = doc.querySelectorAll('.modal [data-style-pick]');
     assert.equal(cards.length, 2);
     assert.match(cards[0].textContent, /Professional\s*Recommended/);
     assert.match(cards[1].textContent, /soft, pretty look, like a planner/);
     assert.equal(doc.querySelector('[data-style-pick="professional"]').getAttribute('aria-checked'), 'true', 'Professional is picked to start with');
-    doc.querySelector('#wName').value = 'Kezara';
     doc.querySelector('[data-style-pick="aesthetic"]').click();
     assert.equal(S.settings.style, 'aesthetic');
     assert.equal(S.settings.palette, 'pearl', 'its own colours');
     assert.equal(doc.documentElement.getAttribute('data-style'), 'aesthetic');
-    assert.equal(doc.querySelector('[data-style-pick="aesthetic"]').getAttribute('aria-checked'), 'true');
-    assert.equal(doc.querySelector('#wName').value, 'Kezara', 'the form was not drawn again');
+    assert.equal(doc.querySelector('.modal'), null, 'the popup closed');
+    assert.equal(S.settings.name, 'Kezara', 'the form was saved');
+  });
+
+  test('closing the style popup keeps Professional', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    S.settings.onboarded = false; L.render();
     doc.querySelector('#wGo').click();
-    assert.equal(L.state.settings.style, 'aesthetic');
+    doc.querySelector('.modal [data-close]').click();
+    assert.equal(S.settings.style, 'professional');
+    assert.equal(S.settings.onboarded, true);
   });
 
   test('Settings switches the look; a colour theme the person chose is kept', (t) => {
@@ -2306,6 +2315,16 @@ describe('style: Professional or Aesthetic', () => {
     assert.equal(doc.querySelector('.modal-head h2').textContent, 'Money in');
   });
 
+  test('Home: the name on its own line under the greeting, and the light/dark switch, in both looks', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    S.settings.name = 'kezara';
+    for (const look of ['professional', 'aesthetic']) {
+      L.setStyle(look); L.ui.view = 'dashboard'; L.render();
+      assert.equal(doc.querySelector('.home-head h1 .greet-name').textContent, 'Kezara', look);
+      assert.ok(doc.querySelector('.home-head .theme-toggle'), look + ' has the switch');
+    }
+  });
+
   test('Home has a Settings button in both looks', (t) => {
     const { L, doc, close } = makeApp(); t.after(close);
     for (const look of ['professional', 'aesthetic']) {
@@ -2321,7 +2340,8 @@ describe('style: Professional or Aesthetic', () => {
     doc.querySelector('#homeMenu').click();
     const more = [...doc.querySelectorAll('.more-list [data-nav]')].map((b) => b.dataset.nav);
     for (const k of ['transactions', 'budgets', 'recurring', 'accounts', 'tools', 'settings']) assert.ok(more.includes(k), k);
-    assert.ok(!more.includes('goals') && !more.includes('calendar'), 'those are on the bar');
+    for (const k of ['calendar', 'reports', 'goals']) assert.ok(more.includes(k), k + ' too: on a computer there is no bottom bar');
+    assert.ok(!more.includes('dashboard'), 'not Home, you are on it');
   });
 
   test('category icons: by name in the add form and the lists, three dots for unknown names', (t) => {

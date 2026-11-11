@@ -63,9 +63,9 @@ Designed and developed by D. Kezara.
 - Web version: https://d-keshara.github.io/pocket-ledger/
 - Delete account (Play Console > App content > Data safety > "Delete account URL"): https://d-keshara.github.io/pocket-ledger/account.html?mode=deleteAccount
 
-## What's new in 1.9.6 (release notes, max 500)
+## What's new in 1.9.7 (release notes, max 500; 1.9.6 never went to Play, so these cover both)
 New: Calendar page with your bills, payday countdown, goal dates and your own reminders, with a warning if money may run short.
-New: Aesthetic style, a soft planner look with a colourful spending chart. Choose it in Settings → Style.
+New: Aesthetic style, a soft, colourful planner look with a spending circle chart. Choose it in Settings → Style.
 New: send an idea or report a problem from Settings → Feedback.
 Better: reminders are on for new installs, and Settings is one tap away on the home page.
 

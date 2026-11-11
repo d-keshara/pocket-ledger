@@ -3,7 +3,7 @@
 'use strict';
 
 /* ================= constants ================= */
-const APP_VERSION = '1.9.6';
+const APP_VERSION = '1.9.7';
 const AUTHOR = 'D. Kezara';
 const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948', '#5f6b66', '#0f6b5c'];
 const CURRENCIES = [
@@ -1164,6 +1164,13 @@ const NAV = [
   ['accounts', 'Accounts', 'wallet'], ['tools', 'Calculator', 'calc'], ['settings', 'Settings', 'gear'],
 ];
 
+/* Home: "Good evening," with the name on its own line under it (its first letter capital). */
+function greetingHtml() {
+  const h = now().getHours();
+  const part = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  const n = (state.settings.name || '').trim();
+  return n ? `${part},<span class="greet-name">${esc(n[0].toUpperCase() + n.slice(1))}</span>` : part;
+}
 function greeting() {
   const h = now().getHours();
   const part = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
@@ -1217,8 +1224,8 @@ function viewHomeAes() {
   const alerts = budgetStatus().filter((b) => b.ratio >= .9);
   const alertHtml = alerts.length ? `<div class="alert ${alerts.some((a) => a.ratio > 1) ? 'over' : 'warn'}">${icon('alert')}<div>${alerts.map((a) => `<b>${esc(a.name)}</b> ${a.ratio > 1 ? `is ${money(a.spent - a.amount)} over its ${a.period} budget` : `has ${money(a.amount - a.spent)} left this ${a.period === 'weekly' ? 'week' : 'month'}`}`).join(' · ')}</div></div>` : '';
   const recent = newestFirst(state.transactions).slice(0, 4);
-  return `<div class="head home-head"><div class="head-title"><h1>${esc(greeting())}</h1><p>${DAY_LONG[parseISO(t).getDay()]}, ${parseISO(t).getDate()} ${MONTH_LONG[parseISO(t).getMonth()]}</p></div>
-      <div class="head-tools"><button class="round-btn" type="button" data-go="settings" aria-label="Settings" title="Settings">${icon('gear')}</button><button class="round-btn" id="homeMenu" type="button" aria-label="All pages" title="All pages">${icon('more')}</button></div></div>
+  return `<div class="head home-head"><div class="head-title"><h1>${greetingHtml()}</h1><p>${DAY_LONG[parseISO(t).getDay()]}, ${parseISO(t).getDate()} ${MONTH_LONG[parseISO(t).getMonth()]}</p></div>
+      <div class="head-tools"><div class="tools-row"><button class="round-btn" type="button" data-go="settings" aria-label="Settings" title="Settings">${icon('gear')}</button><button class="round-btn" id="homeMenu" type="button" aria-label="All pages" title="All pages">${icon('more')}</button></div>${themeToggle()}</div></div>
     <div class="home-aes">
       ${card}
       <section class="aes-card"><h2 class="aes-h">Your week</h2>${weekDots(w)}</section>
@@ -1316,8 +1323,8 @@ function viewDashboard() {
   const upcoming = state.recurring.filter((r) => r.active && r.nextDate <= addDays(t, 14)).sort((a, b) => a.nextDate.localeCompare(b.nextDate)).slice(0, 5);
   const saved = mInc - mExp;
 
-  return `<div class="head home-head"><div class="head-title"><h1>${esc(greeting())}</h1><p>${DAY_LONG[parseISO(t).getDay()]}, ${parseISO(t).getDate()} ${MONTH_LONG[parseISO(t).getMonth()]}</p></div>
-    <div class="head-tools">${cloudButton()}<button class="btn set-btn" type="button" data-go="settings" aria-label="Settings" title="Settings">${icon('gear')}</button>${themeToggle()}</div>
+  return `<div class="head home-head"><div class="head-title"><h1>${greetingHtml()}</h1><p>${DAY_LONG[parseISO(t).getDay()]}, ${parseISO(t).getDate()} ${MONTH_LONG[parseISO(t).getMonth()]}</p></div>
+    <div class="head-tools"><div class="tools-row">${cloudButton()}<button class="btn set-btn" type="button" data-go="settings" aria-label="Settings" title="Settings">${icon('gear')}</button></div>${themeToggle()}</div>
     <div class="actions"><button class="btn" data-add="income">${icon('plus')}Income</button><button class="btn primary" data-add="expense">${icon('plus')}Expense</button><button class="btn calc-open" data-calc-pad aria-label="Calculator" title="Calculator">${icon('calc')}</button><button class="btn calc-open" id="openCal" aria-label="Calendar" title="Calendar">${icon('calendar')}</button></div></div>
     <section class="runway" aria-label="Today and this week">${lead}<div class="days">${daysHtml}</div>${notes}</section>
     ${alertHtml}
@@ -1718,16 +1725,23 @@ function donutChart(rows, total) {
   const parts = (rest.length ? [...rows.slice(0, 5), { name: 'Everything else', v: round2(sum(rest, (r) => r.v)) }] : rows.slice(0, 5))
     .map((p, i) => ({ ...p, color: p.name === 'Everything else' ? DONUT_COLORS[5] : DONUT_COLORS[i] }));
   const R = 70, W = 20, C = 2 * Math.PI * R, pct = (v) => Math.round(v / total * 100);
+  // Every piece gets round ends and the same gap. The round ends stick out W/2 on each side, so a piece needs at least
+  // W + 6 (gap) + 6 (a little colour) of the circle: small ones get that much, taken evenly from the bigger ones.
+  // The legend keeps the real amounts and percentages.
+  const gap = parts.length > 1 ? W + 6 : 0, least = gap + 6;
+  const shares = parts.map((p) => (p.v / total) * C);
+  if (parts.length > 1) {
+    const short = shares.reduce((n, s) => n + Math.max(0, least - s), 0);
+    const spare = shares.reduce((n, s) => n + Math.max(0, s - least), 0);
+    for (let i = 0; i < shares.length; i++) {
+      shares[i] = shares[i] < least ? least : shares[i] - (spare ? (shares[i] - least) / spare * short : 0);
+    }
+  }
   let at = 0;
-  const arcs = parts.map((p) => {
-    const share = (p.v / total) * C;
-    const gap = parts.length > 1 ? W + 6 : 0; // the round ends stick out W/2 each side, plus a 6px gap
-    const len = share - gap;
-    const arc = len > 0.5
-      ? `<circle cx="90" cy="90" r="${R}" fill="none" stroke="${p.color}" stroke-width="${W}" stroke-linecap="round" stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" stroke-dashoffset="${(-(at + gap / 2)).toFixed(2)}"/>`
-      // too small for round ends: a plain short piece
-      : `<circle cx="90" cy="90" r="${R}" fill="none" stroke="${p.color}" stroke-width="${W}" stroke-dasharray="${Math.max(share - 3, 0.5).toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-(at + 1.5)).toFixed(2)}"/>`;
-    at += share;
+  const arcs = parts.map((p, i) => {
+    const len = Math.max(0.01, shares[i] - gap);
+    const arc = `<circle cx="90" cy="90" r="${R}" fill="none" stroke="${p.color}" stroke-width="${W}" stroke-linecap="round" stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" stroke-dashoffset="${(-(at + gap / 2)).toFixed(2)}"/>`;
+    at += shares[i];
     return arc;
   }).join('');
   const label = parts.map((p) => `${p.name} ${pct(p.v)}%`).join(', ');
@@ -2246,13 +2260,8 @@ function viewWelcome() {
   return `<div class="welcome"><div class="welcome-inner"><div class="modal"><div class="modal-body" style="padding:30px 32px">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">${logo(40)}<div><h1>Pocket Ledger</h1><p class="muted" style="margin:0">Know what you can spend today, and make it to the end of the week.</p></div></div>
     <div class="free-badge">${icon('check')}<b>100% free</b><span>No ads · No subscriptions · No account needed</span></div>
-    ${cloud() ? `<div class="have-account">${icon('cloud')}<span>Already use Pocket Ledger on another device? <button class="link-btn" id="wSignIn" type="button">Sign in</button></span></div>` : ''}
+    ${cloud() ? `<div class="have-account">${icon('cloud')}<span>Keep your data safe online and use it on all your devices (optional):<span class="have-account-links"><button class="btn small primary" id="wSignUp" type="button">Create a free account</button><span class="muted">Have an account? <button class="link-btn" id="wSignIn" type="button">Sign in</button></span></span></span></div>` : ''}
     <div class="stack">
-      <div class="field"><span>Pick a style</span>
-        <div class="style-pick" role="radiogroup" aria-label="Style">${STYLES.map(([v, l, d, rec]) => `<button type="button" role="radio" class="style-card style-${v} ${(s.style || 'professional') === v ? 'on' : ''}" aria-checked="${(s.style || 'professional') === v}" data-style-pick="${v}">
-          <span class="style-prev" aria-hidden="true"><span class="sp-hi">${v === 'aesthetic' ? 'Hello' : 'LEFT TODAY'}</span><span class="sp-num">${esc(s.symbol)} 752</span><span class="sp-row"><i></i><i></i><i></i><i></i></span></span>
-          <b>${l}${rec ? ' <span class="rec-badge">Recommended</span>' : ''}</b><small>${d}</small></button>`).join('')}</div>
-        <span class="hint">You can change this any time in Settings.</span></div>
       <label class="field"><span>What should we call you?</span><input class="input" id="wName" placeholder="Your first name" maxlength="30" autofocus></label>
       <div class="grid2"><label class="field"><span>Currency</span><select class="input" id="wCur">${CURRENCIES.map(([c, sym]) => `<option value="${c}" ${s.currency === c ? 'selected' : ''}>${c} (${sym})</option>`).join('')}</select></label>
       <label class="field"><span>Week starts on</span><select class="input" id="wWeek"><option value="1">Monday</option><option value="0">Sunday</option><option value="6">Saturday</option></select></label></div>
@@ -2271,7 +2280,7 @@ function bindWelcome() {
     // the real one. Don't write this form's name, limit and starting balances over the synced accounts.
     if (state !== shown || state.settings.onboarded) {
       state.settings.onboarded = true; save(); render(); toast('Your data from your account is loaded');
-      firstRunNotifications();
+      styleChooser(firstRunNotifications);
       return;
     }
     const s = state.settings; const cur = $('#wCur').value;
@@ -2281,15 +2290,28 @@ function bindWelcome() {
     state.accounts[0].initial = round2(parseFloat($('#wCash').value) || 0);
     if (state.accounts[1]) state.accounts[1].initial = round2(parseFloat($('#wBank').value) || 0);
     save(); render();
-    firstRunNotifications();
+    styleChooser(firstRunNotifications);
   };
   const signIn = $('#wSignIn'); if (signIn) signIn.onclick = () => accountForm('signin');
-  // Picking a style shows it straight away; the form isn't drawn again, so nothing typed is lost.
-  $$('[data-style-pick]').forEach((b) => b.onclick = () => {
-    setStyle(b.dataset.stylePick);
-    $$('[data-style-pick]').forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-checked', String(on)); });
-  });
+  const signUp = $('#wSignUp'); if (signUp) signUp.onclick = () => accountForm('signup');
   $('#wName').focus();
+}
+/* Right after the welcome form: pick a look. Tapping a card applies it and closes; closing keeps Professional.
+   `then` runs once it's closed (the phone's notification question), so the two never show at the same time. */
+function styleChooser(then = () => {}) {
+  const s = state.settings;
+  openModal({
+    title: 'Pick your style',
+    body: `<p class="hint" style="margin:0 0 12px">How should Pocket Ledger look? You can change this any time in Settings.</p>
+      <div class="style-pick" role="radiogroup" aria-label="Style">${STYLES.map(([v, l, d, rec]) => `<button type="button" role="radio" class="style-card style-${v} ${(s.style || 'professional') === v ? 'on' : ''}" aria-checked="${(s.style || 'professional') === v}" data-style-pick="${v}">
+        <span class="style-prev" aria-hidden="true"><span class="sp-hi">${v === 'aesthetic' ? 'Hello' : 'LEFT TODAY'}</span><span class="sp-num">${esc(s.symbol)} 752</span><span class="sp-row"><i></i><i></i><i></i><i></i></span></span>
+        <b>${l}${rec ? ' <span class="rec-badge">Recommended</span>' : ''}</b><small>${d}</small></button>`).join('')}</div>`,
+    onClose: then,
+    onMount: (m) => $$('[data-style-pick]', m).forEach((b) => b.onclick = () => {
+      setStyle(b.dataset.stylePick); save(); closeModal(); render();
+      toast(`${STYLES.find(([v]) => v === b.dataset.stylePick)[1]} style on. Change it any time in Settings.`);
+    }),
+  });
 }
 function logo(size = 30) {
   return `<svg class="brand-mark" width="${size}" height="${size}" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="6" width="28" height="20" rx="5" fill="#5fd3b8"/><rect x="2" y="11" width="28" height="4" fill="#12302a" opacity=".35"/><rect x="18" y="17" width="12" height="7" rx="3.5" fill="#12302a"/><circle cx="22" cy="20.5" r="1.6" fill="#5fd3b8"/></svg>`;
@@ -2326,9 +2348,11 @@ const FAB_ITEMS = [['expense', 'Expense', 'minus'], ['income', 'Income', 'plus']
 const FAB_RADIUS = 150; // px from the + to each button
 function fabMenu() {
   const items = FAB_ITEMS.map(([act, label, ic], i) => {
-    // 90° = straight up, 180° = straight left. Aesthetic: from the + in the middle of the bar, an arc from left to right.
-    const a = (aesthetic() ? 150 - i * 40 : 90 + i * 30) * Math.PI / 180;
-    const x = Math.round(Math.cos(a) * FAB_RADIUS), y = Math.round(-Math.sin(a) * FAB_RADIUS);
+    // 90° = straight up, 180° = straight left
+    const a = (90 + i * 30) * Math.PI / 180;
+    // Aesthetic: from the + in the middle of the bar, one row of four inside a panel above it (styles.css)
+    const x = aesthetic() ? Math.round((i - (FAB_ITEMS.length - 1) / 2) * 84) : Math.round(Math.cos(a) * FAB_RADIUS);
+    const y = aesthetic() ? -107 : Math.round(-Math.sin(a) * FAB_RADIUS);
     return `<button class="fab-item ${act}" data-fab="${act}" tabindex="-1" style="--x:${x}px;--y:${y}px;--i:${i}"><span class="fab-ic">${icon(ic)}</span><span class="fab-label">${label}</span></button>`;
   }).join('');
   return `<div class="fab-wrap" id="fabWrap"><div class="fab-dim" data-fab-close></div>${items}
@@ -2362,7 +2386,7 @@ function bindCommon(root) {
   on('#cloudHead', () => accountForm('signin'));
   on('#moreBtn, #homeMenu', () => openModal({
     title: 'More',
-    body: `<div class="nav more-list">${NAV.filter(([k]) => !phoneBar().includes(k)).map(([k, l, ic]) => `<button data-nav="${k}" class="${ui.view === k ? 'on' : ''}">${icon(ic)}<span>${l}</span></button>`).join('')}</div>
+    body: `<div class="nav more-list">${NAV.filter(([k]) => (aesthetic() ? k !== 'dashboard' : !phoneBar().includes(k))).map(([k, l, ic]) => `<button data-nav="${k}" class="${ui.view === k ? 'on' : ''}">${icon(ic)}<span>${(aesthetic() && AES_LABELS[k]) || l}</span></button>`).join('')}</div>
       <p class="more-credit">Pocket Ledger ${APP_VERSION} · Designed &amp; developed by ${AUTHOR}</p>`,
     onMount: (m) => $$('[data-nav]', m).forEach((b) => b.onclick = () => { closeModal(); ui.view = b.dataset.nav; render(); $('.main').scrollTop = 0; }),
   }));
@@ -2796,7 +2820,7 @@ if (window.__LEDGER_TEST__) {
     weekInfo, accountBalance, totalBalance, postDueRecurring, nextOccurrence, budgetStatus, filteredTx,
     periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner, checkPlayUpdate, versionFromCode, drawBarChart, fabOnScroll, planNotifications, notifyPanel,
     calcEval, toolMath, calcPad, settleCalc,
-    cloudPanel, accountForm, confirmMerge, syncLine, onCloudChange, renderSoon, backupDue, saveBackup, snoozeBackup, reviewDue, askForReview, firstRunNotifications, openPlayPage, setStyle, weekDots, reportSentence, donutChart, phoneBar, catIcon, viewHomeAes, feedbackForm, feedbackMail, FEEDBACK_EMAIL, viewCalendar, openCalendar, calEvents, calDayMarks, calAmt, forecast, firstShortDay, nextPayday, dailySpend, reminderForm, remAmount, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
+    cloudPanel, accountForm, confirmMerge, syncLine, onCloudChange, renderSoon, backupDue, saveBackup, snoozeBackup, reviewDue, askForReview, firstRunNotifications, openPlayPage, setStyle, weekDots, reportSentence, donutChart, phoneBar, catIcon, viewHomeAes, greetingHtml, styleChooser, feedbackForm, feedbackMail, FEEDBACK_EMAIL, viewCalendar, openCalendar, calEvents, calDayMarks, calAmt, forecast, firstShortDay, nextPayday, dailySpend, reminderForm, remAmount, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
   };
 } else {
   let booted = false;
