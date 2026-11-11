@@ -529,3 +529,21 @@ describe('sync: fixes from the bug review', () => {
     assert.ok(notesSize < dataSize * 0.5, `notes ${notesSize} vs data ${dataSize}`);
   });
 });
+
+describe('sync: reminders (Calendar)', () => {
+  test('a reminder added, marked done and deleted on one device shows up on the other', async (t) => {
+    const cloud = pretendCloud();
+    const a = device(cloud); const b = device(cloud); t.after(() => { a.close(); b.close(); });
+    a.S.settings.onboarded = true;
+    await a.signIn(); await b.signIn();
+    a.edit((s) => s.reminders.push({ id: 'm1', title: 'School fees', date: '2026-10-14', amount: 3000, dir: 'out', frequency: '', anchorDay: 14, done: false }));
+    await settle();
+    assert.deepEqual(ids(b.S.reminders), ['m1']);
+    b.edit((s) => { s.reminders[0].done = true; });
+    await settle();
+    assert.equal(a.S.reminders[0].done, true);
+    a.edit((s) => { s.reminders = []; });
+    await settle();
+    assert.equal(b.S.reminders.length, 0);
+  });
+});

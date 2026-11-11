@@ -7,7 +7,7 @@
  *
  * Bump CACHE_VERSION whenever you add or rename files in APP_FILES.
  */
-const CACHE_VERSION = 'v6';
+const CACHE_VERSION = 'v8';
 const CACHE_NAME = `pocket-ledger-${CACHE_VERSION}`;
 const APP_FILES = [
   './',
@@ -20,6 +20,9 @@ const APP_FILES = [
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './fonts/great-vibes-latin.woff2',
+  './fonts/fraunces-latin.woff2',
+  './fonts/nunito-latin.woff2',
 ];
 
 // install: runs once when a new service worker is found. Download the app files.

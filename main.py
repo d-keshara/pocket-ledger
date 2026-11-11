@@ -8,6 +8,7 @@ import os
 import shutil
 import socket
 import sys
+import webbrowser
 from datetime import datetime
 
 import webview
@@ -72,6 +73,12 @@ class Api:
         with open(path, "w", encoding="utf-8-sig" if ext == "csv" else "utf-8") as f:
             f.write(content)
         return path
+
+    def open_email(self, url):
+        """Settings → Feedback: hand a ready-made email to the computer's email app. Only mailto: links."""
+        if not isinstance(url, str) or not url.startswith("mailto:"):
+            return False
+        return webbrowser.open(url)
 
     def open_backup(self):
         result = self._window.create_file_dialog(

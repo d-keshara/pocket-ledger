@@ -8,9 +8,10 @@
  */
 (function (root) {
   // The lists of records that sync. Each record has an id.
-  const LISTS = ['accounts', 'categories', 'transactions', 'budgets', 'goals', 'recurring'];
+  // 'reminders' needs firestore.rules to allow it (published in the Firebase console) before an app with it ships.
+  const LISTS = ['accounts', 'categories', 'transactions', 'budgets', 'goals', 'recurring', 'reminders'];
   // Settings that belong to one device only: the backup reminder, the light/dark choice and the colour theme.
-  const LOCAL_SETTINGS = ['lastBackup', 'backupSnoozeUntil', 'theme', 'palette', 'notify']; // notify: each phone has its own reminders
+  const LOCAL_SETTINGS = ['lastBackup', 'backupSnoozeUntil', 'theme', 'palette', 'style', 'notify']; // notify: each phone has its own reminders; style: Professional or Aesthetic look
 
   /* JSON with keys in a fixed order, so {a,b} and {b,a} give the same text and don't look "changed". */
   function stable(v) {
@@ -215,7 +216,7 @@
       // This device has data from a different account, or made while signed out? Only add it to this one
       // if the person says so, also when this account is still empty (a new account on a shared device).
       const local = hooks.getState();
-      const hasLocalData = ['transactions', 'goals', 'budgets', 'recurring'].some((l) => (local[l] || []).length);
+      const hasLocalData = ['transactions', 'goals', 'budgets', 'recurring', 'reminders'].some((l) => (local[l] || []).length);
       const last = store.lastUid();
       if (last && last !== uid && hasLocalData) {
         const yes = await hooks.confirmMerge();

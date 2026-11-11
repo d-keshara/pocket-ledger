@@ -3,7 +3,7 @@
 'use strict';
 
 /* ================= constants ================= */
-const APP_VERSION = '1.9.5';
+const APP_VERSION = '1.9.6';
 const AUTHOR = 'D. Kezara';
 const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948', '#5f6b66', '#0f6b5c'];
 const CURRENCIES = [
@@ -52,7 +52,33 @@ const ICONS = {
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
   calc: '<rect x="5" y="2.5" width="14" height="19" rx="2"/><path d="M8.5 6.5h7M8.5 11h.01M12 11h.01M15.5 11h.01M8.5 14.5h.01M12 14.5h.01M15.5 14.5h.01M8.5 18h.01M12 18h.01M15.5 18h.01"/>',
   auto: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z"/>',
 };
+/* Category icons for the Aesthetic look, matched by the category's name (people can rename or add categories,
+   so anything unknown gets three dots). Drawn in the category's colour on a soft tint of it. */
+const CAT_ICONS = [
+  [/eat|restaurant|coffee|cafe|lunch/i, 'M17 8h1a4 4 0 1 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z'],
+  [/food|grocer/i, 'M3 10h18l-2 10H5L3 10zM8 10l4-6 4 6'],
+  [/transport|bus|travel|taxi|fuel|car/i, 'M5 6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v11H5zM5 12h14M8 17v2M16 17v2'],
+  [/shop|cloth/i, 'M6 7h12l-1 13H7L6 7zM9 7a3 3 0 0 1 6 0'],
+  [/entertain|fun|movie|game/i, 'M12 3l2.6 5.6 6 .7-4.5 4 1.3 6L12 16.4 6.6 19.3l1.3-6-4.5-4 6-.7z'],
+  [/phone|internet|mobile/i, 'M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM11 18h2'],
+  [/health|medic|doctor|pharm/i, 'M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z'],
+  [/gift/i, 'M4 11h16v9H4zM3 7h18v4H3zM12 7v13M12 7c-2-4-6-3-5 0M12 7c2-4 6-3 5 0'],
+  [/educat|school|book|class/i, 'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 5v16'],
+  [/bill|utilit|electric|water/i, 'M7 3h10v18l-2-1.5L12 21l-3-1.5L7 21zM10 8h4M10 12h4'],
+  [/rent|hous|home/i, 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z'],
+  [/salary|wage|pay/i, 'M3 7h18v12H3zM16 13h2M3 7l3-3h12l3 3'],
+  [/freelance|side|work/i, 'M4 20h4L18 10l-4-4L4 16zM13 7l4 4'],
+  [/pocket|allowance|coin/i, 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v10M15 9.5c0-1-1.3-1.5-3-1.5s-3 .7-3 2 1.3 1.6 3 2 3 1 3 2-1.3 2-3 2-3-.5-3-1.5'],
+  [/^__transfer$/, 'M7 16V4M3 8l4-4 4 4M17 8v12M21 16l-4 4-4-4'],
+];
+function catIcon(name = '') {
+  const d = (CAT_ICONS.find(([re]) => re.test(name)) || [, 'M5 12h.01M12 12h.01M19 12h.01'])[1];
+  return `<svg class="cat-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
+}
 const icon = (n) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
 
 /* ================= utilities ================= */
@@ -96,6 +122,7 @@ const ui = {
   tx: { q: '', type: 'all', cat: 'all', acc: 'all', period: 'month', from: '', to: '' },
   reportPeriod: 'month',
   tools: {}, // what's typed on the Calculator page, so a redraw doesn't clear it
+  cal: { month: '', sel: '', hide: [] }, // Calendar page: month shown, day picked, marks hidden ('' = today)
 };
 
 // True inside the Android app built with Capacitor (see capacitor.config.json).
@@ -134,8 +161,11 @@ function defaultState() {
     version: 1,
     settings: { name: '', currency: 'LKR', symbol: 'Rs', decimals: true, weekStart: 1, weeklyBudget: 0, theme: 'system', onboarded: false,
       lastBackup: '', backupSnoozeUntil: '',
+      reviewAsked: '', // the day we last asked Google Play to show the "rate this app" stars
+      style: 'professional', // the look: 'professional' or 'aesthetic' (soft, like a planner). Each device has its own.
       // Phone notifications (Android app only). Kept on this device, not synced: each phone has its own.
-      notify: { daily: false, dailyTime: '20:00', bills: false, limit: false, summary: false, limitWarnAt: '' } },
+      // All on for a new install; Android asks for permission after the welcome screen (firstRunNotifications).
+      notify: { daily: true, dailyTime: '20:00', bills: true, limit: true, summary: true, reminders: true, limitWarnAt: '' } },
     accounts: [
       { id: uid(), name: 'Cash', initial: 0, color: PALETTE[2] },
       { id: uid(), name: 'Bank account', initial: 0, color: PALETTE[0] },
@@ -144,7 +174,7 @@ function defaultState() {
       ...exp.map(([name, weekly], i) => ({ id: uid(), name, type: 'expense', color: PALETTE[i % PALETTE.length], weekly })),
       ...inc.map((name, i) => ({ id: uid(), name, type: 'income', color: PALETTE[(i + 5) % PALETTE.length], weekly: false })),
     ],
-    transactions: [], budgets: [], goals: [], recurring: [],
+    transactions: [], budgets: [], goals: [], recurring: [], reminders: [],
   };
 }
 
@@ -409,7 +439,7 @@ function txRow(t) {
   }
   // The whole row opens the edit window (it has Delete too). The pencil and bin stay for mouse users on wide screens.
   return `<div class="tx tx-tap" data-edit-row="${t.id}" role="button" tabindex="0" aria-label="Edit ${esc(title)}">
-    <div class="glyph" style="background:${glyphColor}">${esc(letter)}</div>
+    <div class="glyph" style="background:${glyphColor};--c:${glyphColor}"><span class="g-l">${esc(letter)}</span>${catIcon(t.type === 'transfer' ? '__transfer' : c?.name)}</div>
     <div style="min-width:0"><div class="t1">${esc(title)}${t.recurringId ? '<span class="tag">Scheduled</span>' : ''}</div><div class="t2">${sub}</div></div>
     <div class="amt ${amtCls}">${amt}</div>
     <div class="row-actions"><button class="icon-btn" data-edit-tx="${t.id}" aria-label="Edit">${icon('edit')}</button><button class="icon-btn" data-del-tx="${t.id}" aria-label="Delete">${icon('trash')}</button></div>
@@ -468,7 +498,7 @@ function txForm(existing = {}) {
     <div class="stack">
       ${lockType ? '' : `<div class="seg type" id="typeSeg">${['expense', 'income', 'transfer'].map((v) => `<button type="button" data-v="${v}" class="${v === type ? 'on' : ''}">${v[0].toUpperCase() + v.slice(1)}</button>`).join('')}</div>`}
       <label class="field"><span>Amount (${esc(state.settings.symbol)})</span><input class="input amount calc" id="fAmount" type="text" inputmode="decimal" autocomplete="off" value="${draft.amount}" placeholder="0" autofocus></label>
-      ${type === 'transfer' ? '' : `<div class="field"><span>Category</span><div class="chips" id="fCats">${state.categories.filter((c) => c.type === type).map((c) => `<button type="button" class="chip ${c.id === draft.categoryId ? 'on' : ''}" data-id="${c.id}"><i class="dot" style="background:${c.color}"></i>${esc(c.name)}</button>`).join('')}</div></div>`}
+      ${type === 'transfer' ? '' : `<div class="field"><span>Category</span><div class="chips" id="fCats">${state.categories.filter((c) => c.type === type).map((c) => `<button type="button" class="chip ${c.id === draft.categoryId ? 'on' : ''}" data-id="${c.id}"><i class="dot" style="background:${c.color};--c:${c.color}">${catIcon(c.name)}</i>${esc(c.name)}</button>`).join('')}</div></div>`}
       <div class="grid2">
         <label class="field"><span>${lockType ? 'Account' : type === 'transfer' ? 'From account' : 'Account'}</span><select class="input" id="fAcc">${accOptions(draft.accountId)}</select></label>
         ${type === 'transfer' && !lockType ? `<label class="field"><span>To account</span><select class="input" id="fTo">${accOptions(draft.toAccountId)}</select></label>` : `<label class="field"><span>Date</span><input class="input" type="date" id="fDate" value="${draft.date}"></label>`}
@@ -479,7 +509,9 @@ function txForm(existing = {}) {
   const foot = `${isEdit ? `<button class="btn danger left" id="fDel">${icon('trash')}Delete</button>` : ''}
     ${isEdit ? '' : '<button class="btn" id="fAgain">Save and add another</button>'}
     <button class="btn primary" id="fSave">${isEdit ? 'Save changes' : 'Add ' + type}</button>`;
-  const title = isEdit ? 'Edit transaction' : 'New transaction';
+  // The Aesthetic look names what is being added ("New expense") and changes with the type.
+  const aesTitle = () => (isEdit ? 'Edit entry' : { expense: 'New expense', income: 'Money in', transfer: 'Move money' }[type]);
+  const title = aesthetic() ? aesTitle() : isEdit ? 'Edit transaction' : 'New transaction';
 
   const capture = (m) => {
     draft.amount = $('#fAmount', m).value; draft.note = $('#fNote', m).value;
@@ -490,6 +522,7 @@ function txForm(existing = {}) {
     $$('#typeSeg button', m).forEach((b) => b.onclick = () => {
       capture(m); type = b.dataset.v; draft.categoryId = undefined;
       $('.modal-body', m).innerHTML = body(); $('#fSave', m).textContent = isEdit ? 'Save changes' : 'Add ' + type; mount(m); $('#fAmount', m).focus();
+      if (aesthetic()) $('.modal-head h2', m).textContent = aesTitle();
     });
     $$('#fCats .chip', m).forEach((b) => b.onclick = () => { $$('#fCats .chip', m).forEach((x) => x.classList.remove('on')); b.classList.add('on'); draft.categoryId = b.dataset.id; });
     $$('input', m).forEach((i) => i.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#fSave', m).click(); } });
@@ -534,7 +567,7 @@ function txForm(existing = {}) {
       toast(`Added ${money(amount)} ${type}`);
       draft.amount = ''; draft.note = '';
       $('.modal-body', m).innerHTML = body(); mount(m); $('#fAmount', m).focus(); render();
-    } else { closeModal(); render(); toast(isEdit ? 'Changes saved' : `Added ${money(amount)} ${type}`); }
+    } else { closeModal(); render(); toast(isEdit ? 'Changes saved' : `Added ${money(amount)} ${type}`); if (!isEdit) askForReview(); }
   };
   openModal({
     title, body: body(), foot,
@@ -835,6 +868,257 @@ function toolResult(tool) {
   }
   return '';
 }
+/* ---------- calendar ---------- */
+/* Amounts small enough for a calendar day: 450, 1.2k, 12k, 1.5M (no symbol, there is no room). */
+const calAmt = (v) => v < 1000 ? String(Math.round(v)) : v < 1e6 ? (v / 1000).toFixed(v < 10000 ? 1 : 0).replace(/\.0$/, '') + 'k' : (v / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+/* The marks a day can have; each can be hidden with the legend under the month. */
+const CAL_KINDS = [['bill', 'Bills'], ['income', 'Income'], ['goal', 'Goal dates'], ['remind', 'Reminders']];
+/* Things still to come between from and to: every day a scheduled payment will repeat on, and goal target dates. */
+function calEvents(from, to) {
+  const out = [];
+  for (const r of state.recurring) {
+    if (!r.active) continue;
+    let d = r.nextDate, guard = 0;
+    while (d <= to && guard++ < 800) {
+      if (d >= from) out.push({ kind: r.type === 'income' ? 'income' : 'bill', date: d, label: r.note || catName(r.categoryId), amount: r.type === 'income' ? r.amount : -r.amount, recId: r.id });
+      d = nextOccurrence(r, d);
+    }
+  }
+  // Reminders not done yet, on their date and (if they repeat) every date after it.
+  for (const x of state.reminders) {
+    if (x.done) continue;
+    for (let d = x.date, guard = 0; d <= to && guard < 800; guard++) {
+      if (d >= from) out.push({ kind: 'remind', date: d, label: x.title, amount: remAmount(x), remId: x.id });
+      if (!x.frequency) break;
+      d = nextOccurrence(x, d);
+    }
+  }
+  for (const g of state.goals) {
+    if (g.deadline && g.deadline >= from && g.deadline <= to && g.saved < g.target) out.push({ kind: 'goal', date: g.deadline, label: g.name, left: round2(g.target - g.saved), goalId: g.id });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+/* Days up to today: 'none' (nothing spent, a no-spend day), and with a weekly limit 'under' or 'over' that day's share. */
+function calDayMarks(from, to) {
+  const t = today(); const s0 = startedOn(); const out = {};
+  const spentOn = new Set(state.transactions.filter((x) => x.type === 'expense').map((x) => x.date));
+  const limit = +state.settings.weeklyBudget > 0;
+  for (let ws = weekStartOf(from); ws <= to; ws = addDays(ws, 7)) {
+    for (const d of weekInfo(ws).days) {
+      if (d.date < from || d.date > to || d.date > t || d.date < s0) continue;
+      if (!spentOn.has(d.date)) { if (d.date < t) out[d.date] = 'none'; } // today isn't over yet
+      else if (limit && !d.beforeStart) out[d.date] = d.spent > d.share + 0.001 ? 'over' : 'under';
+    }
+  }
+  return out;
+}
+/* How much a transaction changes the total of all accounts (money moved into or out of a goal counts). */
+const totalEffect = (x) => x.type === 'income' ? x.amount : x.type === 'expense' ? -x.amount : (x.toAccountId ? x.amount : 0) - (x.accountId ? x.amount : 0);
+/* Expected total balance at the end of each day from today to `to`: today's balance, then what's already logged
+   for later days and every scheduled payment. Everyday spending isn't in it (see dailySpend). */
+function forecast(to) {
+  const t = today(); const changes = {};
+  const later = state.transactions.filter((x) => x.date > t);
+  for (const x of later) if (x.date <= to) changes[x.date] = (changes[x.date] || 0) + totalEffect(x);
+  for (const e of calEvents(addDays(t, 1), to)) if (e.kind !== 'goal') changes[e.date] = (changes[e.date] || 0) + e.amount;
+  let bal = round2(totalBalance() - sum(later, totalEffect)); // totalBalance counts entries dated later too
+  const out = { [t]: bal };
+  for (let d = addDays(t, 1); d <= to; d = addDays(d, 1)) { bal = round2(bal + (changes[d] || 0)); out[d] = bal; }
+  return out;
+}
+/* With a weekly limit, a day's everyday spending is about a seventh of it; without one we don't guess. */
+const dailySpend = () => round2((+state.settings.weeklyBudget || 0) / 7);
+/* The first day in the next `days` the forecast goes below zero, or null. */
+function firstShortDay(fc, days = 60) {
+  const t = today();
+  for (let d = addDays(t, 1); d <= addDays(t, days); d = addDays(d, 1)) if (fc[d] < 0) return d;
+  return null;
+}
+/* Payday: the next time the biggest scheduled income comes in (within 45 days), and how much there is to live on
+   each day until then once the bills before it are paid. */
+function nextPayday(fc = forecast(addDays(today(), 45))) {
+  const t = today();
+  const incomes = calEvents(addDays(t, 1), addDays(t, 45)).filter((e) => e.kind === 'income');
+  if (!incomes.length) return null;
+  const biggest = incomes.reduce((a, b) => (b.amount > a.amount ? b : a));
+  const pay = incomes.find((e) => e.recId === biggest.recId); // its soonest date
+  const days = daysBetween(t, pay.date); // today up to the day before payday
+  const before = fc[addDays(pay.date, -1)];
+  return { ...pay, days, before, perDay: round2(Math.max(0, before) / days) };
+}
+const calMonth = () => ui.cal.month || monthStart(today());
+const calSel = () => ui.cal.sel || today();
+function viewCalendar() {
+  const t = today(); const month = calMonth(); const sel = calSel(); const last = monthEnd(month);
+  const hidden = (k) => ui.cal.hide.includes(k);
+  const ws = state.settings.weekStart; const m = parseISO(month);
+  // Logged money counts up to today, like the Home page; a later month has nothing logged yet.
+  const upTo = last < t ? last : t;
+  const mInc = upTo >= month ? round2(sum(incomeIn(month, upTo), (x) => x.amount)) : 0;
+  const mExp = upTo >= month ? round2(sum(expensesIn(month, upTo), (x) => x.amount)) : 0;
+  const marks = calDayMarks(month, last);
+  const events = calEvents(month, last);
+  const billsLeft = events.filter((e) => e.kind === 'bill' && e.date > t);
+  // Expected balances far enough ahead for this month, the shortfall warning (60 days) and payday (45 days).
+  const fc = forecast(last > addDays(t, 60) ? last : addDays(t, 60));
+  const short = firstShortDay(fc); const pay = nextPayday(fc);
+  const spent = {}; const got = {};
+  for (const x of state.transactions) if (x.date >= month && x.date <= last) {
+    if (x.type === 'expense') spent[x.date] = (spent[x.date] || 0) + x.amount;
+    if (x.type === 'income') got[x.date] = true;
+  }
+  const box = (k, v, cls = '') => `<div class="cal-sum-box"><span>${k}</span><b class="${cls}">${v}</b></div>`;
+  const fourth = month >= monthStart(t)
+    ? box('Bills to pay', billsLeft.length ? `${billsLeft.length} · ${esc(money(-sum(billsLeft, (e) => e.amount), { short: true }))}` : 'None')
+    : box('No-spend days', Object.values(marks).filter((v) => v === 'none').length);
+  const summary = `<div class="cal-sum">${box('Income', esc(money(mInc, { short: true })), 'pos')}${box('Spent', esc(money(mExp, { short: true })), 'neg')}${box('Net', esc(money(mInc - mExp, { sign: true, short: true })), mInc - mExp < 0 ? 'neg' : '')}${fourth}</div>`;
+
+  const names = Array.from({ length: 7 }, (_, i) => `<span title="${DAY_LONG[(ws + i) % 7]}">${DAY_SHORT[(ws + i) % 7][0]}</span>`).join('');
+  let cells = '<i></i>'.repeat((m.getDay() - ws + 7) % 7); // empty boxes before day 1
+  for (let d = month; d <= last; d = addDays(d, 1)) {
+    const sp = round2(spent[d] || 0); const evs = events.filter((e) => e.date === d);
+    const kinds = new Set(evs.map((e) => e.kind)); if (got[d]) kinds.add('income');
+    const dots = CAL_KINDS.filter(([k]) => kinds.has(k) && !hidden(k)).map(([k]) => `<i class="mk ${k}"></i>`).join('');
+    const low = d > t && fc[d] < 0; // the forecast is below zero on this day
+    const label = [fmtDate(d, { full: true }), sp && `spent ${money(sp)}`, marks[d] === 'none' && 'no-spend day', ...evs.map((e) => e.label), low && 'money may run short'].filter(Boolean).join(', ');
+    cells += `<button type="button" class="cal-day ${marks[d] || ''} ${low ? 'short' : ''} ${d === t ? 'today' : ''} ${d === sel ? 'on' : ''} ${d > t ? 'future' : ''}" data-cal-day="${d}" aria-label="${esc(label)}" aria-pressed="${d === sel}">
+      <b>${parseISO(d).getDate()}</b><small>${sp ? calAmt(sp) : marks[d] === 'none' ? '✓' : '&nbsp;'}</small><span class="cal-marks">${dots}</span></button>`;
+  }
+  const legend = `<div class="cal-legend">${CAL_KINDS.map(([k, l]) => `<button type="button" class="cal-key ${hidden(k) ? 'off' : ''}" data-cal-kind="${k}" aria-pressed="${!hidden(k)}"><i class="mk ${k}"></i>${l}</button>`).join('')}
+    ${+state.settings.weeklyBudget > 0 ? '<span class="cal-key-note"><i class="sw under"></i>Within daily share <i class="sw over"></i>Over</span>' : ''}</div>`;
+
+  // The chosen day: what's planned for it, then what was logged.
+  const dayList = newestFirst(state.transactions.filter((x) => x.date === sel));
+  const dayEvs = calEvents(sel, sel);
+  const net = sum(dayList, (x) => x.type === 'income' ? x.amount : x.type === 'expense' ? -x.amount : 0);
+  const evRow = (e, withDate) => `<button type="button" class="cal-ev" ${withDate ? `data-cal-go="${e.date}"` : e.recId ? `data-cal-rec="${e.recId}"` : e.remId ? `data-cal-rem="${e.remId}"` : `data-cal-goal="${e.goalId}"`}>
+    ${withDate ? `<span class="cal-ev-date ${e.overdue ? 'neg' : ''}">${fmtDate(e.date)}</span>` : ''}<i class="mk ${e.kind}"></i>
+    <span class="cal-ev-name">${esc(e.label)}<small>${e.kind === 'goal' ? `Goal date · ${esc(money(e.left, { short: true }))} to go`
+      : e.kind === 'remind' ? `${e.overdue ? '<span class="neg">Overdue</span> · ' : ''}${FREQ[state.reminders.find((x) => x.id === e.remId)?.frequency] || 'Reminder'}`
+      : FREQ[state.recurring.find((r) => r.id === e.recId)?.frequency] || 'Scheduled'}</small></span>
+    <span class="cal-ev-amt ${e.amount > 0 ? 'pos' : ''}">${e.amount ? moneyHtml(e.amount, { sign: true, short: true }) : ''}</span></button>`;
+  // Today: the balance now. A later day: what should be left after the scheduled payments up to it, and with a
+  // weekly limit, also after everyday spending at that pace.
+  let fcHtml = '';
+  if (sel >= t && fc[sel] !== undefined) {
+    const ds = dailySpend(); const withSpend = round2(fc[sel] - ds * daysBetween(t, sel));
+    fcHtml = `<div class="cal-fc"><span>${sel === t ? 'Balance now' : 'Expected balance'}</span><b class="${fc[sel] < 0 ? 'neg' : ''}">${moneyHtml(fc[sel])}</b>
+      ${sel > t ? `<p class="hint">After the scheduled payments and planned entries up to this day${ds ? `. With everyday spending at your limit (${esc(money(ds, { short: true }))} a day): about <b class="${withSpend < 0 ? 'neg' : ''}">${esc(money(withSpend, { short: true }))}</b>` : ''}.</p>` : ''}</div>`;
+  }
+  const dayPanel = `<div class="panel cal-sel"><h2>${fmtDate(sel, { full: true })}<small>${net ? money(net, { sign: true }) : ''}</small></h2>
+    ${fcHtml}
+    ${dayEvs.map((e) => evRow(e, false)).join('')}
+    ${dayList.length ? `<div class="tx-list">${dayList.map(txRow).join('')}</div>` : ''}
+    ${!dayEvs.length && !dayList.length ? `<p class="hint cal-none">Nothing on this day${sel < t ? '' : ' yet'}.</p>` : ''}
+    <div class="cal-adds"><button class="btn small" type="button" data-cal-add="expense">${icon('plus')}Expense</button><button class="btn small" type="button" data-cal-add="income">${icon('plus')}Income</button><button class="btn small" type="button" data-cal-remind>${icon('bell')}Reminder</button></div></div>`;
+  // Reminders whose day has passed without being marked done come first, in red.
+  const overdue = state.reminders.filter((x) => !x.done && x.date < t).sort((a, b) => a.date.localeCompare(b.date))
+    .map((x) => ({ kind: 'remind', date: x.date, label: x.title, amount: remAmount(x), remId: x.id, overdue: true }));
+  const soon = [...overdue, ...calEvents(t, addDays(t, 30))].slice(0, 8);
+  const soonPanel = `<div class="panel cal-soon"><h2>Coming up <small>next 30 days</small></h2>
+    ${soon.length ? soon.map((e) => evRow(e, true)).join('') : `<p class="hint cal-none">Nothing coming up. Schedule your rent, salary and bills, add a reminder, or give a savings goal a target date, and they show here and on the calendar.</p>
+      <button class="btn small" type="button" data-go="recurring">${icon('repeat')}Schedule a payment</button>`}</div>`;
+
+  const showToday = month !== monthStart(t) || sel !== t;
+  return `<div class="head"><div><h1>Calendar</h1><p>Your spending, bills and goals, day by day.</p></div>
+    ${showToday ? '<div class="actions"><button class="btn" type="button" id="calToday">Today</button></div>' : ''}</div>
+    ${pay || short ? `<div class="cal-top">${pay ? `<button type="button" class="cal-pay" data-cal-go="${pay.date}">
+        <span class="cal-pay-n"><b>${pay.days}</b>${pay.days === 1 ? 'day' : 'days'}</span>
+        <span class="cal-pay-text"><span><b>${pay.days === 1 ? 'Payday is tomorrow' : 'to payday'}</b> · ${esc(pay.label)}, ${fmtDate(pay.date, { full: true })}</span>
+          <small>${pay.before < 0 ? `Bills before then are more than you have: <b class="neg">${esc(money(pay.before, { short: true }))}</b> on the day before`
+            : `About <b>${esc(money(pay.perDay, { short: true }))}</b> a day to live on until then, after bills`}</small></span></button>` : ''}
+      ${short ? `<button type="button" class="cal-warn" data-cal-go="${short}">${icon('alert')}<span><b>Money may run short on ${fmtDate(short, { full: true })}</b>
+        <small>About ${esc(money(fc[short], { short: true }))} after the scheduled payments up to then. Tap to see that day.</small></span></button>` : ''}</div>` : ''}
+    <div class="cal-page">
+      <div class="panel cal-main">
+        <div class="cal-head"><button class="icon-btn cal-prev" type="button" data-cal-move="-1" aria-label="Previous month">${icon('chevron')}</button>
+          <h2 class="cal-title"><span class="cal-mname">${MONTH_LONG[m.getMonth()]}</span><span class="cal-year">${m.getFullYear()}</span></h2>
+          <button class="icon-btn" type="button" data-cal-move="1" aria-label="Next month">${icon('chevron')}</button></div>
+        ${summary}
+        <div class="cal-names" aria-hidden="true">${names}</div><div class="cal-grid">${cells}</div>
+        ${legend}
+      </div>
+      <div class="cal-side">${dayPanel}${soonPanel}</div>
+    </div>`;
+}
+/* Opens the Calendar page on a day (today by default), in that day's month. */
+function openCalendar(day = today()) {
+  ui.cal.sel = day; ui.cal.month = monthStart(day); ui.view = 'calendar';
+  render(); const main = $('.main'); if (main) main.scrollTop = 0;
+}
+function bindCalendar(root) {
+  $$('[data-cal-day]', root).forEach((b) => b.onclick = () => { ui.cal.sel = b.dataset.calDay; render(); });
+  $$('[data-cal-move]', root).forEach((b) => b.onclick = () => { ui.cal.month = monthStart(addMonths(calMonth(), +b.dataset.calMove)); render(); });
+  $$('[data-cal-kind]', root).forEach((b) => b.onclick = () => {
+    const k = b.dataset.calKind; const h = ui.cal.hide;
+    ui.cal.hide = h.includes(k) ? h.filter((x) => x !== k) : [...h, k]; render();
+  });
+  const back = $('#calToday', root); if (back) back.onclick = () => openCalendar();
+  $$('[data-cal-add]', root).forEach((b) => b.onclick = () => txForm({ type: b.dataset.calAdd, date: calSel() }));
+  // "Coming up" rows jump to their day; on the chosen day's own list they open the payment, or the goals page.
+  $$('[data-cal-go]', root).forEach((b) => b.onclick = () => openCalendar(b.dataset.calGo));
+  $$('[data-cal-rec]', root).forEach((b) => b.onclick = () => recForm(state.recurring.find((r) => r.id === b.dataset.calRec)));
+  $$('[data-cal-goal]', root).forEach((b) => b.onclick = () => { ui.view = 'goals'; render(); $('.main').scrollTop = 0; });
+  $$('[data-cal-rem]', root).forEach((b) => b.onclick = () => reminderForm(state.reminders.find((x) => x.id === b.dataset.calRem)));
+  $$('[data-cal-remind]', root).forEach((b) => b.onclick = () => reminderForm({ date: calSel() }));
+}
+/* ---------- reminders (Calendar) ---------- */
+/* A note on a date ("School fees", "Insurance renewal"), maybe with an amount and a repeat. With an amount it counts
+   in the expected balance; the phone reminds on the morning of the day. Marking a repeating one done moves it on. */
+const remAmount = (x) => (x.amount ? (x.dir === 'in' ? x.amount : -x.amount) : 0);
+const REM_REPEATS = [['', 'Doesn’t repeat'], ['weekly', FREQ.weekly], ['monthly', FREQ.monthly], ['yearly', FREQ.yearly]];
+function reminderForm(saved = {}) {
+  const r = { dir: 'out', frequency: '', ...saved };
+  const isEdit = !!r.id; const t = today();
+  let dir = r.dir;
+  openModal({
+    title: isEdit ? 'Edit reminder' : 'New reminder',
+    body: `<div class="stack">
+      <label class="field"><span>What to remember</span><input class="input" id="mTitle" value="${esc(r.title || '')}" maxlength="80" placeholder="e.g. School fees, Insurance renewal" autofocus></label>
+      <div class="grid2">
+        <label class="field"><span>Date</span><input class="input" type="date" id="mDate" value="${r.date || t}"></label>
+        <label class="field"><span>Repeats</span><select class="input" id="mRep">${REM_REPEATS.map(([v, l]) => `<option value="${v}" ${(r.frequency || '') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      </div>
+      <label class="field"><span>Amount (${esc(state.settings.symbol)}) <span class="muted" style="font-weight:400">(optional)</span></span><input class="input calc" id="mAmt" type="text" inputmode="decimal" autocomplete="off" value="${r.amount || ''}" placeholder="0"></label>
+      <div class="seg" id="mDir" role="radiogroup" aria-label="Money out or in">${[['out', 'Money out'], ['in', 'Money in']].map(([v, l]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${dir === v}" class="${dir === v ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <p class="hint" style="margin:0">With an amount, it counts in the expected balance on the Calendar.${isNativeApp() ? ' Your phone reminds you at 9:00 that morning.' : ''}</p>
+    </div>`,
+    foot: `${isEdit ? '<button class="btn danger left" id="mDel">Delete</button>' : ''}${isEdit && !r.done ? `<button class="btn" id="mDone">Done</button>` : ''}
+      <button class="btn" data-close>Cancel</button><button class="btn primary" id="mSave">Save</button>`,
+    onMount: (m) => {
+      $$('#mDir button', m).forEach((b) => b.onclick = () => {
+        dir = b.dataset.v;
+        $$('#mDir button', m).forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', String(x === b)); });
+      });
+      $('#mSave', m).onclick = async () => {
+        const title = $('#mTitle', m).value.trim(); if (!title) return toast('Write what to remember');
+        const date = $('#mDate', m).value || t;
+        const amount = round2(parseFloat($('#mAmt', m).value) || 0);
+        if (amount < 0) return toast('Enter the amount without a minus; choose Money out or Money in');
+        const frequency = $('#mRep', m).value;
+        const rec = { title, date, amount, dir, frequency, anchorDay: parseISO(date).getDate(), done: isEdit && date === r.date ? !!r.done : false };
+        if (isEdit) Object.assign(state.reminders.find((x) => x.id === r.id), rec); else state.reminders.push({ id: uid(), ...rec });
+        save(); closeModal(); render(); toast('Reminder saved');
+        // The first reminder on the phone: make sure Android lets the app show it.
+        if (isNativeApp() && notifySettings().reminders && !(await allowNotifications())) toast('Notifications are off for Pocket Ledger, so the phone can’t remind you. Turn them on in your phone’s Settings → Apps.');
+      };
+      const done = $('#mDone', m);
+      if (done) done.onclick = () => {
+        const x = state.reminders.find((y) => y.id === r.id);
+        if (x.frequency) { x.date = nextOccurrence(x, x.date); toast(`Done. Next one: ${fmtDate(x.date, { full: true })}`); }
+        else { x.done = true; toast('Reminder done'); }
+        save(); closeModal(); render();
+      };
+      const del = $('#mDel', m);
+      if (del) del.onclick = () => {
+        const i = state.reminders.findIndex((x) => x.id === r.id); const [gone] = state.reminders.splice(i, 1);
+        save(); closeModal(); render();
+        toast('Reminder deleted', { label: 'Undo', run: () => { state.reminders.splice(i, 0, gone); save(); render(); } });
+      };
+    },
+  });
+}
+
 function viewTools() {
   const sym = esc(state.settings.symbol);
   const isMoney = new Set(['price', 'total', 'amount', 'target', 'saved']);
@@ -869,8 +1153,13 @@ function bindTools(root) {
 /* ================= views ================= */
 /* On phones only the first four pages fit in the bottom bar; the rest live behind "More". */
 const PHONE_BAR = ['dashboard', 'transactions', 'budgets', 'reports'];
+/* The Aesthetic look's bar: Home · Calendar · (+) · Spending · Goals (styles.css puts them in that order).
+   The other pages open from the round menu button on Home. */
+const PHONE_BAR_AES = ['dashboard', 'calendar', 'reports', 'goals'];
+const phoneBar = () => (aesthetic() ? PHONE_BAR_AES : PHONE_BAR);
+const AES_LABELS = { dashboard: 'Home', reports: 'Spending', goals: 'Goals' };
 const NAV = [
-  ['dashboard', 'This week', 'home'], ['transactions', 'Transactions', 'list'], ['budgets', 'Budgets', 'target'],
+  ['dashboard', 'This week', 'home'], ['transactions', 'Transactions', 'list'], ['calendar', 'Calendar', 'calendar'], ['budgets', 'Budgets', 'target'],
   ['goals', 'Savings goals', 'flag'], ['recurring', 'Scheduled', 'repeat'], ['reports', 'Reports', 'chart'],
   ['accounts', 'Accounts', 'wallet'], ['tools', 'Calculator', 'calc'], ['settings', 'Settings', 'gear'],
 ];
@@ -881,7 +1170,66 @@ function greeting() {
   return state.settings.name ? `${part}, ${state.settings.name}` : part;
 }
 
+/* The Aesthetic look's week: a dot per day instead of bars. ✓ = within the day's share (or nothing spent without a
+   limit), the amount in coral when over it, today ringed, the days to come empty. One plain sentence under it. */
+function weekDots(w) {
+  const done = w.days.slice(0, w.todayIdx).filter((d) => !d.beforeStart);
+  const check = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+  const dots = w.days.map((d, i) => {
+    const isToday = i === w.todayIdx, future = i > w.todayIdx;
+    const over = w.B && d.spent > d.share + 0.001;
+    const cls = d.beforeStart ? 'off' : isToday ? 'today' : future ? 'future' : over ? 'over' : (w.B || !d.spent) ? 'ok' : 'spent';
+    const inside = cls === 'ok' ? check : (isToday || cls === 'over' || cls === 'spent' || (future && d.spent)) && d.spent ? esc(calAmt(d.spent)) : '';
+    const label = `${fmtDate(d.date, { full: true })}: ${d.beforeStart ? 'before you started' : future ? (d.spent ? `${money(d.spent)} planned` : 'still to come') : `spent ${money(d.spent)}${over ? ', over the day’s share' : ''}`}`;
+    return `<div class="wdot ${cls}" role="img" aria-label="${esc(label)}"><span class="wdot-c">${inside}</span><span class="dn">${isToday ? 'Today' : DAY_SHORT[parseISO(d.date).getDay()]}</span></div>`;
+  }).join('');
+  let note;
+  if (!done.length) note = 'A fresh week. Every day you stay within your share gets a tick.';
+  else if (w.B) {
+    const ok = done.filter((d) => d.spent <= d.share + 0.001).length;
+    note = ok === done.length ? `${ok === 1 ? 'Yesterday' : `All ${ok} days so far`} stayed within your limit. Lovely!` : `${ok} of ${done.length} days so far stayed within your limit.`;
+  } else {
+    const free = done.filter((d) => !d.spent).length;
+    note = `${free} no-spend day${free === 1 ? '' : 's'} so far this week.`;
+  }
+  return `<div class="wdots-wrap"><div class="wdots">${dots}</div><p class="wdots-note">${note}</p></div>`;
+}
+/* The Aesthetic Home, as designed: greeting, the dark "you can spend today" card, your week as dots,
+   Expense · Income · Move money, any alerts, and the latest entries. */
+function viewHomeAes() {
+  const w = weekInfo(); const t = today();
+  let card;
+  if (w.B) {
+    const left = Math.max(0, w.leftToday);
+    const over = w.remaining <= 0 ? -w.remaining : -w.leftToday;
+    const sub = over > 0.005 ? `<b class="hero-over">${esc(money(over, { short: true }))} over ${w.remaining <= 0 ? 'this week' : 'today'}</b>`
+      : `${esc(money(Math.max(0, w.remaining - left), { short: true }))} left for the rest of this week`;
+    card = `<section class="hero" aria-label="Today"><span class="hero-k">You can spend today</span><div class="hero-v">${moneyHtml(left)}</div>
+      <span class="hero-s">${sub}</span>
+      <div class="hero-bar"><i style="width:${(clamp(w.spent / w.B, 0, 1) * 100).toFixed(1)}%"></i></div>
+      <div class="hero-foot"><span>${esc(money(w.spent, { short: true }))} spent</span><button class="link-btn" id="setBudget" type="button">Limit ${esc(money(w.fullB, { short: true }))} ›</button></div></section>`;
+  } else {
+    card = `<section class="hero" aria-label="This week"><span class="hero-k">Spent this week</span><div class="hero-v">${moneyHtml(w.spent)}</div>
+      <button class="link-btn" id="setBudget" type="button">Set a weekly limit to see what you can spend each day ›</button></section>`;
+  }
+  const quick = [['expense', 'Expense', 'M7 17 17 7M8 7h9v9'], ['income', 'Income', 'M17 7 7 17M16 17H7V8'], ['transfer', 'Move money', 'M7 16V4M3 8l4-4 4 4M17 8v12M21 16l-4 4-4-4']]
+    .map(([a, l, d]) => `<button class="qa-tile" type="button" data-fab="${a}"><span class="qa-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg></span>${l}</button>`).join('');
+  const alerts = budgetStatus().filter((b) => b.ratio >= .9);
+  const alertHtml = alerts.length ? `<div class="alert ${alerts.some((a) => a.ratio > 1) ? 'over' : 'warn'}">${icon('alert')}<div>${alerts.map((a) => `<b>${esc(a.name)}</b> ${a.ratio > 1 ? `is ${money(a.spent - a.amount)} over its ${a.period} budget` : `has ${money(a.amount - a.spent)} left this ${a.period === 'weekly' ? 'week' : 'month'}`}`).join(' · ')}</div></div>` : '';
+  const recent = newestFirst(state.transactions).slice(0, 4);
+  return `<div class="head home-head"><div class="head-title"><h1>${esc(greeting())}</h1><p>${DAY_LONG[parseISO(t).getDay()]}, ${parseISO(t).getDate()} ${MONTH_LONG[parseISO(t).getMonth()]}</p></div>
+      <div class="head-tools"><button class="round-btn" type="button" data-go="settings" aria-label="Settings" title="Settings">${icon('gear')}</button><button class="round-btn" id="homeMenu" type="button" aria-label="All pages" title="All pages">${icon('more')}</button></div></div>
+    <div class="home-aes">
+      ${card}
+      <section class="aes-card"><h2 class="aes-h">Your week</h2>${weekDots(w)}</section>
+      <div class="qa">${quick}</div>
+      ${alertHtml}${backupCard()}
+      <section class="aes-card"><h2 class="aes-h">Recently <button class="link-btn" type="button" data-go="transactions">See all</button></h2>
+        ${recent.length ? `<div class="tx-list">${recent.map(txRow).join('')}</div>` : empty('list', 'Nothing here yet', 'Tap Expense when you spend something, and it shows here.')}</section>
+    </div>`;
+}
 function viewDashboard() {
+  if (aesthetic()) return viewHomeAes();
   const w = weekInfo(); const s = state.settings; const t = today();
   const mFrom = monthStart(t), mTo = monthEnd(t);
   // Month numbers count up to today: a payment dated later this month hasn't happened yet.
@@ -969,8 +1317,8 @@ function viewDashboard() {
   const saved = mInc - mExp;
 
   return `<div class="head home-head"><div class="head-title"><h1>${esc(greeting())}</h1><p>${DAY_LONG[parseISO(t).getDay()]}, ${parseISO(t).getDate()} ${MONTH_LONG[parseISO(t).getMonth()]}</p></div>
-    <div class="head-tools">${cloudButton()}${themeToggle()}</div>
-    <div class="actions"><button class="btn" data-add="income">${icon('plus')}Income</button><button class="btn primary" data-add="expense">${icon('plus')}Expense</button><button class="btn calc-open" data-calc-pad aria-label="Calculator" title="Calculator">${icon('calc')}</button></div></div>
+    <div class="head-tools">${cloudButton()}<button class="btn set-btn" type="button" data-go="settings" aria-label="Settings" title="Settings">${icon('gear')}</button>${themeToggle()}</div>
+    <div class="actions"><button class="btn" data-add="income">${icon('plus')}Income</button><button class="btn primary" data-add="expense">${icon('plus')}Expense</button><button class="btn calc-open" data-calc-pad aria-label="Calculator" title="Calculator">${icon('calc')}</button><button class="btn calc-open" id="openCal" aria-label="Calendar" title="Calendar">${icon('calendar')}</button></div></div>
     <section class="runway" aria-label="Today and this week">${lead}<div class="days">${daysHtml}</div>${notes}</section>
     ${alertHtml}
     ${backupCard()}
@@ -1248,12 +1596,29 @@ function viewGoals() {
       const days = daysBetween(t, g.deadline);
       plan = days > 0 ? `Save ${money(left / Math.max(1, days / 7), { short: true })} a week to reach it by ${fmtDate(g.deadline, { full: true, noDay: true })}` : `<span class="neg">Deadline passed, ${money(left)} to go</span>`;
     } else plan = `${money(left)} to go`;
+    if (aesthetic()) {
+      const tip = left <= 0 ? 'Goal reached. Well done!'
+        : g.deadline && daysBetween(t, g.deadline) > 0 ? `Put aside <b>${esc(money(left / Math.max(1, daysBetween(t, g.deadline) / 7), { short: true }))} a week</b> and you’ll get there on time.`
+        : g.deadline ? `The date has passed. <b>${esc(money(left, { short: true }))}</b> to go.`
+        : pct >= 0.7 ? `Almost there! Only <b>${esc(money(left, { short: true }))}</b> to go.` : `<b>${esc(money(left, { short: true }))}</b> to go.`;
+      return `<section class="goal-card${left <= 0 ? ' done' : ''}"><div class="goal-top"><span class="goal-ic">${icon('flag')}</span>
+        <span class="goal-name"><b>${esc(g.name)}</b><small>${g.deadline ? `by ${fmtDate(g.deadline, { full: true, noDay: true })}` : 'No date set'}</small></span><b class="goal-pct">${Math.round(clamp(pct, 0, 1) * 100)}%</b></div>
+        <div class="goal-bar"><i style="width:${(clamp(pct, 0, 1) * 100).toFixed(1)}%"></i></div>
+        <div class="goal-amts"><span><b>${esc(money(g.saved, { short: true }))}</b> saved</span><span>of ${esc(money(g.target, { short: true }))}</span></div>
+        <p class="goal-tip">${tip}</p>
+        <div class="goal-btns"><button class="btn primary" type="button" data-goal-add="${g.id}">Add money</button><button class="btn" type="button" data-goal-take="${g.id}">Take out</button>
+          <button class="icon-btn" type="button" data-goal-edit="${g.id}" aria-label="Edit goal">${icon('edit')}</button><button class="icon-btn" type="button" data-goal-del="${g.id}" aria-label="Delete goal">${icon('trash')}</button></div></section>`;
+    }
     return `<div class="card"><div class="top"><div><h3>${esc(g.name)}</h3><div class="meta">Target ${money(g.target)}</div></div>${ring(pct)}</div>
       <div class="big">${moneyHtml(g.saved)}</div><div class="meta">${plan}</div>
       <div class="foot"><button class="btn small primary" data-goal-add="${g.id}">${icon('plus')}Add money</button><button class="btn small" data-goal-take="${g.id}">${icon('minus')}Take out</button>
       <button class="icon-btn" data-goal-edit="${g.id}" aria-label="Edit goal" style="margin-left:auto">${icon('edit')}</button><button class="icon-btn" data-goal-del="${g.id}" aria-label="Delete goal">${icon('trash')}</button></div></div>`;
   }).join('');
   const total = sum(state.goals, (g) => g.saved);
+  if (aesthetic()) {
+    return `<div class="head"><div><h1>Savings goals</h1><p>${state.goals.length ? 'Little by little, it all adds up.' : 'Give your savings a purpose: a phone, a trip, an emergency fund.'}</p></div></div>
+      <div class="goals-aes">${cards}<button class="goal-new" type="button" id="addGoal">${icon('plus')}Start a new goal</button></div>`;
+  }
   return `<div class="head"><div><h1>Savings goals</h1><p>${state.goals.length ? `${money(total)} put aside across ${state.goals.length} goal${state.goals.length > 1 ? 's' : ''}.` : 'Give your savings a purpose: a phone, a trip, an emergency fund.'}</p></div>
     <div class="actions"><button class="btn primary" id="addGoal">${icon('plus')}New goal</button></div></div>
     ${state.goals.length ? `<div class="cards">${cards}</div>` : `<div class="panel">${empty('flag', 'No goals yet', 'Start with an emergency fund. Even a small weekly amount adds up.', `<button class="btn primary" id="addGoal2">${icon('plus')}Create a goal</button>`)}</div>`}`;
@@ -1344,6 +1709,38 @@ function recForm(saved = {}) {
 }
 
 /* ---------- reports ---------- */
+/* The Aesthetic look's spending by category: a colourful ring with the total in the middle, and a legend under it.
+   The 5 biggest categories, the rest as "Everything else". Round ends with a small gap between the parts. */
+const DONUT_COLORS = ['#5b7cfa', '#f2788f', '#f5b83d', '#3fbf95', '#a780f0', '#a3a1ac'];
+function donutChart(rows, total) {
+  // Its own colours by size, not the categories' (two categories can share a colour): always 6 different ones.
+  const rest = rows.slice(5);
+  const parts = (rest.length ? [...rows.slice(0, 5), { name: 'Everything else', v: round2(sum(rest, (r) => r.v)) }] : rows.slice(0, 5))
+    .map((p, i) => ({ ...p, color: p.name === 'Everything else' ? DONUT_COLORS[5] : DONUT_COLORS[i] }));
+  const R = 70, W = 20, C = 2 * Math.PI * R, pct = (v) => Math.round(v / total * 100);
+  let at = 0;
+  const arcs = parts.map((p) => {
+    const share = (p.v / total) * C;
+    const gap = parts.length > 1 ? W + 6 : 0; // the round ends stick out W/2 each side, plus a 6px gap
+    const len = share - gap;
+    const arc = len > 0.5
+      ? `<circle cx="90" cy="90" r="${R}" fill="none" stroke="${p.color}" stroke-width="${W}" stroke-linecap="round" stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" stroke-dashoffset="${(-(at + gap / 2)).toFixed(2)}"/>`
+      // too small for round ends: a plain short piece
+      : `<circle cx="90" cy="90" r="${R}" fill="none" stroke="${p.color}" stroke-width="${W}" stroke-dasharray="${Math.max(share - 3, 0.5).toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-(at + 1.5)).toFixed(2)}"/>`;
+    at += share;
+    return arc;
+  }).join('');
+  const label = parts.map((p) => `${p.name} ${pct(p.v)}%`).join(', ');
+  return `<div class="donut-wrap"><div class="donut"><svg viewBox="0 0 180 180" role="img" aria-label="${esc('Spending by category: ' + label)}"><g transform="rotate(-90 90 90)">${arcs}</g></svg>
+    <div class="donut-mid"><span>Spent</span><b>${esc(money(total, { short: true }))}</b></div></div>
+    <div class="donut-legend">${parts.map((p) => `<div class="dl"><i style="background:${p.color}"></i><span>${esc(p.name)}<b>${esc(money(p.v, { short: true }))}</b></span><small>${pct(p.v)}%</small></div>`).join('')}</div></div>`;
+}
+/* The words in the Aesthetic "You spent" card: where most of the money went. ("You kept" has its own card.) */
+function reportSentence(rows, tEx, tIn) {
+  if (!tEx && !tIn) return 'Nothing yet in this period. Add some income or expenses and a summary shows here.';
+  const top = rows[0];
+  return top ? `Most of it went on <b>${esc(top.name)}</b> (${Math.round(top.v / tEx * 100)}%).` : 'Nothing spent yet.';
+}
 function viewReports() {
   const p = ui.reportPeriod; const t = today();
   let [from, to] = periodRange(p);
@@ -1379,6 +1776,16 @@ function viewReports() {
   const top = [...ex].sort((a, b) => b.amount - a.amount).slice(0, 6);
   const periods = [['week', 'This week'], ['month', 'This month'], ['lastmonth', 'Last month'], ['3m', '3 months'], ['year', 'This year'], ['all', 'All time']];
 
+  if (aesthetic()) {
+    // As designed: period pills, a dark "You spent" card with the plain-words summary, the ring, "You kept", biggest expenses.
+    const kept = round2(tIn - tEx);
+    return `<div class="head"><div><h1>Your spending</h1><p>${fmtDate(from, { full: true, noDay: true })} – ${fmtDate(to, { full: true, noDay: true })}</p></div></div>
+      <div class="pills" id="rp" role="radiogroup" aria-label="Period">${periods.map(([v, l]) => `<button type="button" role="radio" aria-checked="${p === v}" data-v="${v}" class="${p === v ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <section class="hero" aria-label="Spent"><span class="hero-k">You spent</span><div class="hero-v">${moneyHtml(tEx)}</div><p class="hero-p">${reportSentence(rows, tEx, tIn)}</p></section>
+      <section class="aes-card"><h2 class="aes-h">Where it went</h2>${rows.length ? donutChart(rows, tEx) : empty('chart', 'No spending in this period', 'Pick a longer period or add expenses.')}</section>
+      ${tIn ? `<section class="kept ${kept < 0 ? 'neg' : ''}"><span class="kept-ic">${icon('wallet')}</span><span><b>${kept >= 0 ? `You kept ${esc(money(kept))}` : `You spent ${esc(money(-kept))} more than came in`}</b><small>${kept >= 0 ? `That’s ${Math.round(kept / tIn * 100)}% of what came in.${kept / tIn >= 0.2 ? ' Well done!' : ''}` : 'Next time, try to keep a little back.'}</small></span></section>` : ''}
+      <section class="aes-card"><h2 class="aes-h">Biggest expenses</h2>${top.length ? `<div class="tx-list">${top.map(txRow).join('')}</div>` : empty('list', 'No expenses', 'Nothing was spent in this period.')}</section>`;
+  }
   return `<div class="head"><div><h1>Reports</h1><p>${fmtDate(from, { full: true, noDay: true })} – ${fmtDate(to, { full: true, noDay: true })}</p></div>
     <div class="seg" id="rp">${periods.map(([v, l]) => `<button data-v="${v}" class="${p === v ? 'on' : ''}">${l}</button>`).join('')}</div></div>
     <div class="stats" style="margin-top:0">
@@ -1457,6 +1864,7 @@ function viewSettings() {
         ${row('Week starts on', seg('data-week', s.weekStart, [[1, 'Mon'], [0, 'Sun'], [6, 'Sat']]))}
       </div></section>
       <section class="set-group"><h2 class="set-title">Appearance</h2><div class="set-card">
+        <div class="set-row set-col"><div class="set-label"><b>Style</b></div><div class="look-rows" role="radiogroup" aria-label="Style">${STYLES.map(([v, l, d, rec]) => `<button type="button" role="radio" class="look-row look-${v} ${(s.style || 'professional') === v ? 'on' : ''}" aria-checked="${(s.style || 'professional') === v}" data-look="${v}"><span class="look-aa">Aa</span><span class="look-txt"><b>${l}${rec ? ' <span class="rec-badge">Recommended</span>' : ''}</b><small>${d}</small></span><i class="look-radio"></i></button>`).join('')}</div></div>
         ${row('Mode', seg('data-mode', s.theme, [['system', isNativeApp() ? 'Phone' : 'Auto'], ['light', 'Light'], ['dark', 'Dark']]), s.theme === 'system' ? systemLabel() : '')}
         <div class="set-row set-col"><div class="set-label"><b>Colour theme</b></div>
           <div class="palettes" role="radiogroup" aria-label="Colour theme">${PALETTES.map(([v, l]) => `<button type="button" role="radio" aria-checked="${(s.palette || 'forest') === v}" class="pal pal-${v}" data-pal="${v}"><i aria-hidden="true"></i><span>${l}</span></button>`).join('')}</div></div>
@@ -1471,6 +1879,11 @@ function viewSettings() {
         ${action('reset', 'trash', 'Erase all data', 'danger')}
       </div><p class="hint set-foot" id="dataLoc"></p><p class="hint set-foot shortcuts-hint">Shortcuts: N new expense · I new income · Esc close</p></section>
       ${cloudPanel()}
+      <section class="set-group"><h2 class="set-title">Feedback</h2><div class="set-card">
+        ${action('fbIdea', 'mail', 'Send an idea or feedback')}
+        ${action('fbProblem', 'alert', 'Report a problem')}
+        ${isNativeApp() ? action('rateApp', 'star', 'Rate on Google Play') : ''}
+      </div><p class="hint set-foot">Every message is read by the developer. Ideas often become new features.</p></section>
       <section class="set-group"><h2 class="set-title">Expense categories <button class="btn small" data-cat-add="expense">${icon('plus')}Add</button></h2><div class="set-card set-list">${catList('expense')}</div></section>
       <section class="set-group"><h2 class="set-title">Income categories <button class="btn small" data-cat-add="income">${icon('plus')}Add</button></h2><div class="set-card set-list">${catList('income')}</div></section>
     </div>
@@ -1790,8 +2203,23 @@ function setTheme(t) {
   if (document.startViewTransition && !reduce) document.startViewTransition(applyTheme); else applyTheme();
 }
 /* Colour themes: each has a light and a dark version (the colours are in styles.css). Forest is the original. */
-const PALETTES = [['forest', 'Forest'], ['onyx', 'Onyx'], ['navy', 'Navy'], ['mocha', 'Mocha']];
+const PALETTES = [['forest', 'Forest'], ['onyx', 'Onyx'], ['navy', 'Navy'], ['mocha', 'Mocha'], ['pearl', 'Pearl']];
+/* The two looks. Aesthetic changes fonts, shapes and a few screens (styles.css: [data-style="aesthetic"]), not the data. */
+// [value, name, what it is like, recommended]
+const STYLES = [
+  ['professional', 'Professional', 'A simple, professional look. Clear and easy to read every day.', true],
+  ['aesthetic', 'Aesthetic', 'A soft, pretty look, like a planner. Handwritten titles and pastel colours.', false],
+];
+const aesthetic = () => state?.settings.style === 'aesthetic';
+/* Choosing a look also picks its colours, unless the person chose another colour theme themselves. */
+function setStyle(style) {
+  const s = state.settings; s.style = style;
+  if (style === 'aesthetic' && (!s.palette || s.palette === 'forest')) s.palette = 'pearl';
+  if (style === 'professional' && s.palette === 'pearl') s.palette = 'forest';
+  applyTheme();
+}
 function applyTheme() {
+  if (aesthetic()) document.documentElement.setAttribute('data-style', 'aesthetic'); else document.documentElement.removeAttribute('data-style');
   const t = state?.settings.theme || 'system';
   if (t === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
   const p = state?.settings.palette;
@@ -1820,6 +2248,11 @@ function viewWelcome() {
     <div class="free-badge">${icon('check')}<b>100% free</b><span>No ads · No subscriptions · No account needed</span></div>
     ${cloud() ? `<div class="have-account">${icon('cloud')}<span>Already use Pocket Ledger on another device? <button class="link-btn" id="wSignIn" type="button">Sign in</button></span></div>` : ''}
     <div class="stack">
+      <div class="field"><span>Pick a style</span>
+        <div class="style-pick" role="radiogroup" aria-label="Style">${STYLES.map(([v, l, d, rec]) => `<button type="button" role="radio" class="style-card style-${v} ${(s.style || 'professional') === v ? 'on' : ''}" aria-checked="${(s.style || 'professional') === v}" data-style-pick="${v}">
+          <span class="style-prev" aria-hidden="true"><span class="sp-hi">${v === 'aesthetic' ? 'Hello' : 'LEFT TODAY'}</span><span class="sp-num">${esc(s.symbol)} 752</span><span class="sp-row"><i></i><i></i><i></i><i></i></span></span>
+          <b>${l}${rec ? ' <span class="rec-badge">Recommended</span>' : ''}</b><small>${d}</small></button>`).join('')}</div>
+        <span class="hint">You can change this any time in Settings.</span></div>
       <label class="field"><span>What should we call you?</span><input class="input" id="wName" placeholder="Your first name" maxlength="30" autofocus></label>
       <div class="grid2"><label class="field"><span>Currency</span><select class="input" id="wCur">${CURRENCIES.map(([c, sym]) => `<option value="${c}" ${s.currency === c ? 'selected' : ''}>${c} (${sym})</option>`).join('')}</select></label>
       <label class="field"><span>Week starts on</span><select class="input" id="wWeek"><option value="1">Monday</option><option value="0">Sunday</option><option value="6">Saturday</option></select></label></div>
@@ -1838,6 +2271,7 @@ function bindWelcome() {
     // the real one. Don't write this form's name, limit and starting balances over the synced accounts.
     if (state !== shown || state.settings.onboarded) {
       state.settings.onboarded = true; save(); render(); toast('Your data from your account is loaded');
+      firstRunNotifications();
       return;
     }
     const s = state.settings; const cur = $('#wCur').value;
@@ -1847,8 +2281,14 @@ function bindWelcome() {
     state.accounts[0].initial = round2(parseFloat($('#wCash').value) || 0);
     if (state.accounts[1]) state.accounts[1].initial = round2(parseFloat($('#wBank').value) || 0);
     save(); render();
+    firstRunNotifications();
   };
   const signIn = $('#wSignIn'); if (signIn) signIn.onclick = () => accountForm('signin');
+  // Picking a style shows it straight away; the form isn't drawn again, so nothing typed is lost.
+  $$('[data-style-pick]').forEach((b) => b.onclick = () => {
+    setStyle(b.dataset.stylePick);
+    $$('[data-style-pick]').forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-checked', String(on)); });
+  });
   $('#wName').focus();
 }
 function logo(size = 30) {
@@ -1861,13 +2301,13 @@ function render() {
   hideTip(); // a tip from the previous page must not stay on screen
   const root = $('#root');
   if (!state.settings.onboarded) { root.innerHTML = viewWelcome(); bindWelcome(); return; }
-  const views = { dashboard: viewDashboard, transactions: viewTransactions, budgets: viewBudgets, goals: viewGoals, recurring: viewRecurring, reports: viewReports, accounts: viewAccounts, tools: viewTools, settings: viewSettings };
+  const views = { dashboard: viewDashboard, transactions: viewTransactions, calendar: viewCalendar, budgets: viewBudgets, goals: viewGoals, recurring: viewRecurring, reports: viewReports, accounts: viewAccounts, tools: viewTools, settings: viewSettings };
   const scroll = $('.main')?.scrollTop || 0;
   chartSpecs.length = 0;
   const w = weekInfo();
   root.innerHTML = `<div class="app"><aside class="side"><div class="brand">${logo()}<span class="brand-name">Pocket Ledger</span></div>
-    <nav class="nav">${NAV.map(([k, l, ic]) => `<button data-nav="${k}" class="${ui.view === k ? 'on' : ''} ${PHONE_BAR.includes(k) ? '' : 'phone-hide'}" ${ui.view === k ? 'aria-current="page"' : ''}>${icon(ic)}<span>${l}</span></button>`).join('')}
-      <button class="more-btn ${PHONE_BAR.includes(ui.view) ? '' : 'on'}" id="moreBtn">${icon('more')}<span>More</span></button></nav>
+    <nav class="nav">${NAV.map(([k, l, ic]) => `<button data-nav="${k}" class="${ui.view === k ? 'on' : ''} ${phoneBar().includes(k) ? '' : 'phone-hide'}" ${ui.view === k ? 'aria-current="page"' : ''}>${icon(ic)}<span>${(aesthetic() && AES_LABELS[k]) || l}</span></button>${aesthetic() && k === 'calendar' ? `<button class="nav-add" id="navAdd" type="button" aria-label="Add" aria-expanded="false">${icon('plus')}</button>` : ''}`).join('')}
+      <button class="more-btn ${phoneBar().includes(ui.view) ? '' : 'on'}" id="moreBtn">${icon('more')}<span>More</span></button></nav>
     <div class="side-foot">${w.B ? `Left this week<strong>${moneyHtml(w.remaining)}</strong>` : `Balance<strong>${moneyHtml(totalBalance())}</strong>`}
       <div class="credit">Designed &amp; developed by ${AUTHOR.replace(' ', '&nbsp;')}</div></div></aside>
     <main class="main"><div class="page">${views[ui.view]()}</div></main>
@@ -1877,6 +2317,7 @@ function render() {
   bindCommon(root);
   if (ui.view === 'transactions') bindTransactions(root);
   if (ui.view === 'settings') bindSettings(root);
+  if (ui.view === 'calendar') bindCalendar(root);
   if (ui.view === 'tools') bindTools(root);
   if (ui.view === 'reports') $$('#rp button', root).forEach((b) => b.onclick = () => { ui.reportPeriod = b.dataset.v; render(); });
 }
@@ -1885,7 +2326,8 @@ const FAB_ITEMS = [['expense', 'Expense', 'minus'], ['income', 'Income', 'plus']
 const FAB_RADIUS = 150; // px from the + to each button
 function fabMenu() {
   const items = FAB_ITEMS.map(([act, label, ic], i) => {
-    const a = (90 + i * 30) * Math.PI / 180; // 90° = straight up, 180° = straight left
+    // 90° = straight up, 180° = straight left. Aesthetic: from the + in the middle of the bar, an arc from left to right.
+    const a = (aesthetic() ? 150 - i * 40 : 90 + i * 30) * Math.PI / 180;
     const x = Math.round(Math.cos(a) * FAB_RADIUS), y = Math.round(-Math.sin(a) * FAB_RADIUS);
     return `<button class="fab-item ${act}" data-fab="${act}" tabindex="-1" style="--x:${x}px;--y:${y}px;--i:${i}"><span class="fab-ic">${icon(ic)}</span><span class="fab-label">${label}</span></button>`;
   }).join('');
@@ -1896,6 +2338,7 @@ function setFab(open) {
   const w = $('#fabWrap'); if (!w) return;
   w.classList.toggle('open', open);
   $('#fab', w).setAttribute('aria-expanded', String(open));
+  const add = $('#navAdd'); if (add) { add.setAttribute('aria-expanded', String(open)); add.classList.toggle('open', open); }
   $$('.fab-item', w).forEach((b) => { b.tabIndex = open ? 0 : -1; });
 }
 function bindCommon(root) {
@@ -1904,7 +2347,9 @@ function bindCommon(root) {
   on('[data-go]', (el) => { ui.view = el.dataset.go; render(); $('.main').scrollTop = 0; });
   on('[data-add]', (el) => txForm({ type: el.dataset.add }));
   on('[data-calc-pad]', () => calcPad());
+  on('#openCal', () => openCalendar());
   on('#fab', () => setFab(!$('#fabWrap').classList.contains('open')));
+  on('#navAdd', () => setFab(!$('#fabWrap').classList.contains('open'))); // the Aesthetic bar's +
   on('[data-fab-close]', () => setFab(false));
   on('[data-fab]', (el) => {
     setFab(false);
@@ -1915,9 +2360,9 @@ function bindCommon(root) {
   });
   on('[data-theme-set]', (el) => setTheme(el.dataset.themeSet));
   on('#cloudHead', () => accountForm('signin'));
-  on('#moreBtn', () => openModal({
+  on('#moreBtn, #homeMenu', () => openModal({
     title: 'More',
-    body: `<div class="nav more-list">${NAV.filter(([k]) => !PHONE_BAR.includes(k)).map(([k, l, ic]) => `<button data-nav="${k}" class="${ui.view === k ? 'on' : ''}">${icon(ic)}<span>${l}</span></button>`).join('')}</div>
+    body: `<div class="nav more-list">${NAV.filter(([k]) => !phoneBar().includes(k)).map(([k, l, ic]) => `<button data-nav="${k}" class="${ui.view === k ? 'on' : ''}">${icon(ic)}<span>${l}</span></button>`).join('')}</div>
       <p class="more-credit">Pocket Ledger ${APP_VERSION} · Designed &amp; developed by ${AUTHOR}</p>`,
     onMount: (m) => $$('[data-nav]', m).forEach((b) => b.onclick = () => { closeModal(); ui.view = b.dataset.nav; render(); $('.main').scrollTop = 0; }),
   }));
@@ -1959,6 +2404,7 @@ function bindSettings(root) {
   $$('[data-week]', root).forEach((b) => b.onclick = () => { s.weekStart = +b.dataset.week; save(); render(); });
   $$('[data-mode]', root).forEach((b) => b.onclick = () => { s.theme = b.dataset.mode; save(); render(); });
   $$('[data-pal]', root).forEach((b) => b.onclick = () => { s.palette = b.dataset.pal; save(); render(); });
+  $$('[data-look]', root).forEach((b) => b.onclick = () => { setStyle(b.dataset.look); save(); render(); });
   $('#sDec', root).onchange = (e) => { s.decimals = e.target.checked; save(); render(); };
   bindNotifyPanel(root);
   $('#backup', root).onclick = saveBackup;
@@ -1977,6 +2423,9 @@ function bindSettings(root) {
   if (hasApi()) window.pywebview.api.data_location().then((p) => { const el = $('#dataLoc'); if (el) el.textContent = 'Saved automatically to ' + p; });
   else $('#dataLoc', root).textContent = isNativeApp() ? 'Saved automatically on this phone.' : 'Saved automatically in this browser.';
   bindCloud(root);
+  const rate = $('#rateApp', root); if (rate) rate.onclick = openPlayPage;
+  $('#fbIdea', root).onclick = () => feedbackForm('idea');
+  $('#fbProblem', root).onclick = () => feedbackForm('problem');
   $$('[data-cat-add]', root).forEach((b) => b.onclick = () => catForm({}, b.dataset.catAdd));
   $$('[data-cat-edit]', root).forEach((b) => b.onclick = () => catForm(cat(b.dataset.catEdit)));
   $$('[data-cat-del]', root).forEach((b) => b.onclick = () => {
@@ -2009,7 +2458,7 @@ const notifySettings = () => ({ ...defaultState().settings.notify, ...state.sett
 /* A Date for a day ("2026-11-05") at a time ("20:00"), in the phone's own time zone. */
 function notifyAt(iso, hhmm) { const d = parseISO(iso); const [h, m] = hhmm.split(':').map(Number); d.setHours(h, m, 0, 0); return d; }
 /* What to show and when, for the next 7 days. Pure: reads the data, changes nothing, so the tests can check it.
-   Ids: 1xx daily reminder, 2xx payments, 300 weekly limit, 400 weekly summary. */
+   Ids: 1xx daily reminder, 2xx payments, 300 weekly limit, 400 weekly summary, 5xx the person's own reminders. */
 function planNotifications(nowMs = now().getTime()) {
   const n = notifySettings(), t = today(), out = [];
   const add = (id, at, title, body) => { if (at.getTime() > nowMs + 60000) out.push({ id, at, title, body }); };
@@ -2028,6 +2477,12 @@ function planNotifications(nowMs = now().getTime()) {
         add(200 + k++, notifyAt(addDays(due, -1), NOTIFY_MORNING), r.type === 'income' ? 'Coming in tomorrow 💰' : 'Due tomorrow 🗓️', `${what}: ${amt}`);
       }
     }
+  }
+  if (n.reminders) {
+    // The morning of each reminder in the next week (500 + a number).
+    calEvents(t, addDays(t, 7)).filter((e) => e.kind === 'remind').forEach((e, k) => {
+      add(500 + k, notifyAt(e.date, NOTIFY_MORNING), `🔔 ${e.label}`, e.amount ? `Today: ${money(Math.abs(e.amount))}${e.amount > 0 ? ' coming in' : ''}` : 'Your reminder for today');
+    });
   }
   const w = weekInfo(t);
   if (n.limit && w.B && w.spent >= w.B * 0.8) {
@@ -2073,6 +2528,14 @@ async function allowNotifications() {
     return p.display === 'granted';
   } catch { return false; }
 }
+/* Phone app, right after the welcome screen: the switches start on, so ask Android for permission now.
+   If the person says no, turn them all off, so Settings doesn't show switches that can't work. */
+async function firstRunNotifications() {
+  if (!isNativeApp()) return;
+  if (await allowNotifications()) return scheduleNotifications(); // plan again now that they're allowed
+  state.settings.notify = { ...notifySettings(), daily: false, bills: false, limit: false, summary: false, reminders: false };
+  save();
+}
 function notifyPanel() {
   if (!isNativeApp()) return '';
   const n = notifySettings();
@@ -2084,6 +2547,7 @@ function notifyPanel() {
     ${row('bills', 'Payment due tomorrow', 'The day before a scheduled payment or income, at 9:00.')}
     ${row('limit', 'Weekly limit warning', 'Once a week, the morning after you pass 80% of your weekly limit.')}
     ${row('summary', 'Weekly summary', 'On the last evening of your week: what you spent and how it went.')}
+    ${row('reminders', 'Your reminders', 'At 9:00 on the day of each reminder you add on the Calendar.')}
   </div><p class="hint set-foot">Your phone shows these itself. Nothing is sent anywhere.</p></section>`;
 }
 function bindNotifyPanel(root) {
@@ -2135,6 +2599,75 @@ async function checkPlayUpdate() {
     });
   } catch { /* no update info: carry on quietly */ }
 }
+/* ---------- feedback (Settings → Feedback) ----------
+   The person writes their message here; Send opens their own email app with it filled in, addressed to the developer.
+   Nothing is sent by the app itself, so no new data is collected. The app version and device help with problems. */
+const FEEDBACK_EMAIL = 'kesharadhananjanaofc@gmail.com';
+const FEEDBACK_KINDS = [
+  ['idea', 'Idea', 'What would make Pocket Ledger better for you?'],
+  ['problem', 'Problem', 'What happened, and what did you expect? The steps to make it happen again help a lot.'],
+  ['other', 'Something else', 'Write anything you like.'],
+];
+function feedbackMail(kind, message) {
+  const label = (FEEDBACK_KINDS.find(([k]) => k === kind) || FEEDBACK_KINDS[2])[1];
+  const where = isNativeApp() ? 'Android app' : hasApi() ? 'Windows app' : 'web';
+  const body = `${message}\n\n--\nPocket Ledger ${APP_VERSION} (${where}, ${aesthetic() ? 'Aesthetic' : 'Professional'} look)\n${navigator.userAgent}`;
+  return `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(`Pocket Ledger ${label.toLowerCase()}`)}&body=${encodeURIComponent(body)}`;
+}
+/* Phone and browser: going to a mailto: link hands it to the email app. Windows app: main.py opens it. */
+function openEmail(url) {
+  if (hasApi() && window.pywebview.api.open_email) return window.pywebview.api.open_email(url);
+  window.location.href = url;
+}
+function feedbackForm(kind = 'idea') {
+  openModal({
+    title: 'Send feedback',
+    body: `<div class="stack">
+      <div class="seg type" id="fbKind" role="radiogroup" aria-label="What is it about?">${FEEDBACK_KINDS.map(([k, l]) => `<button type="button" role="radio" data-v="${k}" aria-checked="${k === kind}" class="${k === kind ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <label class="field"><span>Your message</span><textarea class="input" id="fbMsg" rows="6" maxlength="3000" placeholder="${esc(FEEDBACK_KINDS.find(([k]) => k === kind)[2])}" autofocus></textarea></label>
+      <p class="hint" style="margin:0">Send opens your email app with this message, ready to go to <b>${FEEDBACK_EMAIL}</b>. The app version and your phone or browser type are added to help fix problems. You can read everything before you send it.</p>
+    </div>`,
+    foot: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="fbSend">Send</button>',
+    onMount: (m) => {
+      $$('#fbKind button', m).forEach((b) => b.onclick = () => {
+        kind = b.dataset.v;
+        $$('#fbKind button', m).forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-checked', String(on)); });
+        $('#fbMsg', m).placeholder = FEEDBACK_KINDS.find(([k]) => k === kind)[2];
+      });
+      $('#fbSend', m).onclick = () => {
+        const message = $('#fbMsg', m).value.trim();
+        if (!message) { toast('Write a message first'); $('#fbMsg', m).focus(); return; }
+        openEmail(feedbackMail(kind, message));
+        closeModal(); toast('Opening your email app. Thank you!');
+      };
+    },
+  });
+}
+/* Phone app only: opens the app's Google Play page so people can leave a rating (the AppReview plugin). */
+function openPlayPage() {
+  const AppReview = window.Capacitor?.Plugins?.AppReview;
+  if (!AppReview) return toast('Could not open Google Play');
+  AppReview.openAppStore().catch(() => toast('Could not open Google Play'));
+}
+/* Asking for a rating: only people who have really used the app (20+ entries over a week or more), and at most
+   once every 120 days. Google decides whether the stars actually show, and never tells us. */
+const REVIEW_MIN_TX = 20, REVIEW_MIN_DAYS = 7, REVIEW_AGAIN_DAYS = 120;
+function reviewDue(st = state, t = today()) {
+  const asked = st.settings.reviewAsked;
+  if (asked && daysBetween(asked, t) < REVIEW_AGAIN_DAYS) return false;
+  const mine = st.transactions.filter((x) => !x.auto); // scheduled ones added by the app don't count
+  if (mine.length < REVIEW_MIN_TX) return false;
+  const first = mine.reduce((m, x) => (x.date < m ? x.date : m), st.settings.startedOn || t);
+  return daysBetween(first, t) >= REVIEW_MIN_DAYS;
+}
+/* Phone app only: called right after a new transaction is saved, a happy moment to ask. */
+function askForReview() {
+  const AppReview = window.Capacitor?.Plugins?.AppReview;
+  if (!isNativeApp() || !AppReview || !reviewDue()) return;
+  state.settings.reviewAsked = today(); save();
+  // Wait for the form to close and the "Added" message to show first.
+  setTimeout(() => AppReview.requestReview().catch(() => {}), 1500);
+}
 if ('serviceWorker' in navigator && !isNativeApp()) {
   // A brand-new install also "changes controller", so only count it if one was running before.
   const hadController = !!navigator.serviceWorker.controller;
@@ -2146,7 +2679,7 @@ if ('serviceWorker' in navigator && !isNativeApp()) {
 function migrate(d) {
   const base = defaultState();
   d.settings = { ...base.settings, ...d.settings };
-  for (const k of ['accounts', 'categories', 'transactions', 'budgets', 'goals', 'recurring']) if (!Array.isArray(d[k])) d[k] = base[k];
+  for (const k of ['accounts', 'categories', 'transactions', 'budgets', 'goals', 'recurring', 'reminders']) if (!Array.isArray(d[k])) d[k] = base[k];
   d.version = 1;
   return d;
 }
@@ -2156,7 +2689,7 @@ function migrate(d) {
    Returns { state, added } where added counts the new items in each list. Neither input is changed. */
 function mergeStates(mine, theirs) {
   const out = JSON.parse(JSON.stringify(mine)); theirs = JSON.parse(JSON.stringify(theirs));
-  const added = { transactions: 0, accounts: 0, categories: 0, goals: 0, budgets: 0, recurring: 0 };
+  const added = { transactions: 0, accounts: 0, categories: 0, goals: 0, budgets: 0, recurring: 0, reminders: 0 };
   const sameName = (a, b) => String(a.name || '').trim().toLowerCase() === String(b.name || '').trim().toLowerCase();
   // Adds their items that this device doesn't have. Returns a map: their id -> the id used on this device.
   const mergeList = (k, sameAs, fix = (x) => x, onMatch = () => {}) => {
@@ -2178,6 +2711,7 @@ function mergeStates(mine, theirs) {
     (m, r) => { if (r.nextDate > m.nextDate) m.nextDate = r.nextDate; }); // the other device may have posted further ahead
   mergeList('budgets', (a, b) => a.categoryId === ref(catMap, b.categoryId) && a.period === b.period,
     (b) => ({ ...b, categoryId: ref(catMap, b.categoryId) }));
+  mergeList('reminders', null, (x) => x, (m, r) => { if (r.date > m.date) m.date = r.date; if (r.done) m.done = true; }); // done on either device counts
 
   for (const t of theirs.transactions) {
     Object.assign(t, { accountId: ref(accMap, t.accountId), toAccountId: ref(accMap, t.toAccountId), categoryId: ref(catMap, t.categoryId),
@@ -2211,7 +2745,7 @@ function restoreBox(data) {
 /* "Added 12 transactions, 1 account", or a note that the backup had nothing new. */
 function mergeSummary(a) {
   const parts = [[a.transactions, 'transaction', 'transactions'], [a.accounts, 'account', 'accounts'], [a.categories, 'category', 'categories'],
-    [a.goals, 'goal', 'goals'], [a.budgets, 'budget', 'budgets'], [a.recurring, 'scheduled payment', 'scheduled payments']]
+    [a.goals, 'goal', 'goals'], [a.budgets, 'budget', 'budgets'], [a.recurring, 'scheduled payment', 'scheduled payments'], [a.reminders, 'reminder', 'reminders']]
     .filter(([n]) => n).map(([n, one, many]) => `${n} ${n === 1 ? one : many}`);
   return parts.length ? 'Added ' + parts.join(', ') : 'Nothing new in this backup';
 }
@@ -2262,7 +2796,7 @@ if (window.__LEDGER_TEST__) {
     weekInfo, accountBalance, totalBalance, postDueRecurring, nextOccurrence, budgetStatus, filteredTx,
     periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner, checkPlayUpdate, versionFromCode, drawBarChart, fabOnScroll, planNotifications, notifyPanel,
     calcEval, toolMath, calcPad, settleCalc,
-    cloudPanel, accountForm, confirmMerge, syncLine, onCloudChange, renderSoon, backupDue, saveBackup, snoozeBackup, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
+    cloudPanel, accountForm, confirmMerge, syncLine, onCloudChange, renderSoon, backupDue, saveBackup, snoozeBackup, reviewDue, askForReview, firstRunNotifications, openPlayPage, setStyle, weekDots, reportSentence, donutChart, phoneBar, catIcon, viewHomeAes, feedbackForm, feedbackMail, FEEDBACK_EMAIL, viewCalendar, openCalendar, calEvents, calDayMarks, calAmt, forecast, firstShortDay, nextPayday, dailySpend, reminderForm, remAmount, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
   };
 } else {
   let booted = false;

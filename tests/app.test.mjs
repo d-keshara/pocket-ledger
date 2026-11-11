@@ -878,12 +878,29 @@ describe('accounts on the home page', () => {
 /* ------------------------------------------------ phone notifications */
 describe('phone notifications (Android app)', () => {
   // Today in the tests is Wednesday 7 Oct 2026, 10:00. The week is Mon 5 - Sun 11 Oct.
-  const on = (S, o) => { S.settings.notify = { ...S.settings.notify, ...o }; };
+  // Every switch off, then the ones a test turns on (a new install starts with all of them on).
+  const on = (S, o) => { S.settings.notify = { ...S.settings.notify, daily: false, bills: false, limit: false, summary: false, ...o }; };
   const when = (x) => `${x.at.getFullYear()}-${String(x.at.getMonth() + 1).padStart(2, '0')}-${String(x.at.getDate()).padStart(2, '0')} ${String(x.at.getHours()).padStart(2, '0')}:${String(x.at.getMinutes()).padStart(2, '0')}`;
 
-  test('all off by default: nothing is planned', (t) => {
-    const { L, close } = makeApp(); t.after(close);
+  test('a new install starts with every switch on; with all off, nothing is planned', (t) => {
+    const { L, S, close } = makeApp(); t.after(close);
+    const n = S.settings.notify;
+    assert.deepEqual([n.daily, n.bills, n.limit, n.summary], [true, true, true, true]);
+    on(S, {});
     assert.equal(L.planNotifications().length, 0);
+  });
+
+  test('after the welcome screen the phone asks for permission; a no turns every switch off', async (t) => {
+    for (const answer of ['granted', 'denied']) {
+      const { w, L, S, close } = makeApp(); t.after(close);
+      w.Capacitor = { isNativePlatform: () => true, Plugins: { LocalNotifications: {
+        checkPermissions: async () => ({ display: 'prompt' }), requestPermissions: async () => ({ display: answer }),
+        getPending: async () => ({ notifications: [] }), cancel: async () => {}, schedule: async () => {},
+      } } };
+      await L.firstRunNotifications();
+      const n = S.settings.notify;
+      assert.deepEqual([n.daily, n.bills, n.limit, n.summary], answer === 'granted' ? [true, true, true, true] : [false, false, false, false]);
+    }
   });
 
   test('daily reminder: 7 evenings at the chosen time, but not tonight if something was added today', (t) => {
@@ -938,6 +955,7 @@ describe('phone notifications (Android app)', () => {
 
   test('the Notifications section is only in the phone app; a refused permission leaves the switch off', async (t) => {
     const { w, L, S, doc, close } = makeApp(); t.after(close);
+    on(S, {});
     L.ui.view = 'settings'; L.render();
     assert.ok(!/Notifications/.test(doc.querySelector('#root').textContent), 'not on the web');
     w.Capacitor = { isNativePlatform: () => true, Plugins: { LocalNotifications: {
@@ -1777,3 +1795,648 @@ describe('calculator', () => {
   });
 });
 const round = (n) => Math.round(n * 100) / 100;
+
+/* ------------------------------------------ asking for a Play rating */
+describe('rate the app', () => {
+  // Adds `count` expenses, the oldest one `oldestDaysAgo` days before today (7 Oct).
+  const addHistory = (app, count, oldestDaysAgo) => {
+    for (let i = 0; i < count; i++) {
+      app.add({ type: 'expense', amount: 100, date: app.L.addDays('2026-10-07', -Math.max(oldestDaysAgo - i, 0)), categoryId: app.expenseCat('Food').id });
+    }
+  };
+  const fakePhone = (w, calls) => {
+    w.Capacitor = { isNativePlatform: () => true, Plugins: { AppReview: {
+      requestReview: async () => { calls.push('review'); },
+      openAppStore: async () => { calls.push('store'); },
+    } } };
+    w.setTimeout = (fn) => fn(); // skip the short wait before the stars
+  };
+
+  test('not asked until 20 entries over at least a week', (t) => {
+    const app = makeApp(); t.after(app.close);
+    addHistory(app, 19, 30);
+    assert.equal(app.L.reviewDue(), false); // too few entries
+    const fresh = makeApp(); t.after(fresh.close);
+    fresh.S.settings.startedOn = '2026-10-04'; // installed 3 days ago
+    addHistory(fresh, 25, 3);
+    assert.equal(fresh.L.reviewDue(), false); // too new
+    addHistory(app, 1, 30);
+    assert.equal(app.L.reviewDue(), true);
+  });
+
+  test('scheduled entries the app added itself do not count', (t) => {
+    const app = makeApp(); t.after(app.close);
+    addHistory(app, 19, 30);
+    app.add({ type: 'expense', amount: 100, date: '2026-10-01', categoryId: app.expenseCat('Food').id, auto: true });
+    assert.equal(app.L.reviewDue(), false);
+  });
+
+  test('asked at most once every 120 days', (t) => {
+    const app = makeApp(); t.after(app.close);
+    addHistory(app, 20, 200);
+    app.S.settings.reviewAsked = '2026-07-01'; // 98 days ago
+    assert.equal(app.L.reviewDue(), false);
+    app.S.settings.reviewAsked = '2026-06-09'; // 120 days ago
+    assert.equal(app.L.reviewDue(), true);
+  });
+
+  test('on the phone, asks Google Play and remembers the day', (t) => {
+    const app = makeApp(); t.after(app.close);
+    const calls = [];
+    fakePhone(app.w, calls);
+    addHistory(app, 20, 30);
+    app.L.askForReview();
+    assert.deepEqual(calls, ['review']);
+    assert.equal(app.S.settings.reviewAsked, '2026-10-07');
+    app.L.askForReview(); // just asked: not again
+    assert.deepEqual(calls, ['review']);
+  });
+
+  test('never asks on the web or desktop, and Settings has no Rate button there', (t) => {
+    const app = makeApp(); t.after(app.close);
+    addHistory(app, 20, 30);
+    app.L.askForReview();
+    assert.equal(app.S.settings.reviewAsked, '');
+    app.L.ui.view = 'settings'; app.L.render();
+    assert.equal(app.doc.querySelector('#rateApp'), null);
+  });
+
+  test('Settings → Feedback: write an idea, Send opens the email app with it filled in', (t) => {
+    const { L, w, doc, close } = makeApp(); t.after(close);
+    let opened = '';
+    w.pywebview = { api: { save_data: () => {}, data_location: async () => 'C:/data.json', open_email: (url) => { opened = url; return true; } } }; // the Windows app
+    L.ui.view = 'settings'; L.render();
+    assert.match(doc.querySelector('.page').textContent, /Feedback[\s\S]*Send an idea or feedback[\s\S]*Report a problem/);
+    assert.equal(doc.querySelector('#rateApp'), null, 'no Play Store row outside the phone app');
+    doc.querySelector('#fbProblem').click();
+    assert.equal(doc.querySelector('#fbKind [aria-checked="true"]').dataset.v, 'problem');
+    doc.querySelector('#fbSend').click();
+    assert.equal(opened, '', 'an empty message is not sent');
+    doc.querySelector('#fbMsg').value = 'The calendar shows the wrong month & day';
+    doc.querySelector('#fbSend').click();
+    assert.match(opened, /^mailto:kesharadhananjanaofc@gmail\.com\?subject=Pocket%20Ledger%20problem&body=/);
+    const body = decodeURIComponent(opened.split('&body=')[1]);
+    assert.match(body, /^The calendar shows the wrong month & day\n\n--\nPocket Ledger \d+\.\d+\.\d+ \(Windows app, Professional look\)/);
+    assert.equal(doc.querySelector('#fbMsg'), null, 'the form closed');
+  });
+
+  test('switching the kind changes the hint in the message box', (t) => {
+    const { L, doc, close } = makeApp(); t.after(close);
+    L.feedbackForm('idea');
+    assert.match(doc.querySelector('#fbMsg').placeholder, /better for you/);
+    doc.querySelector('#fbKind [data-v="problem"]').click();
+    assert.match(doc.querySelector('#fbMsg').placeholder, /What happened/);
+  });
+
+  test('Settings on the phone has "Rate on Google Play", which opens the store', (t) => {
+    const app = makeApp(); t.after(app.close);
+    const calls = [];
+    fakePhone(app.w, calls);
+    app.L.ui.view = 'settings'; app.L.render();
+    app.doc.querySelector('#rateApp').click();
+    assert.deepEqual(calls, ['store']);
+  });
+});
+
+/* ------------------------------------------ calendar */
+describe('calendar page', () => {
+  // Rent on the 1st of every month, salary on the 25th: both still to come (today is Wed 7 Oct 2026).
+  const schedule = ({ S, cash, expenseCat, incomeCat }) => {
+    S.recurring.push({ id: 'rent', type: 'expense', amount: 15000, note: 'Rent', categoryId: expenseCat('Rent').id,
+      frequency: 'monthly', nextDate: '2026-11-01', anchorDay: 1, accountId: cash.id, active: true });
+    S.recurring.push({ id: 'pay', type: 'income', amount: 50000, note: 'Salary', categoryId: incomeCat().id,
+      frequency: 'monthly', nextDate: '2026-10-25', anchorDay: 25, accountId: cash.id, active: true });
+  };
+  const open = (app, day) => { app.L.openCalendar(day); return app.doc; };
+
+  test('the Home calendar button opens the Calendar page on today', (t) => {
+    const { L, doc, close } = makeApp(); t.after(close);
+    L.ui.view = 'dashboard'; L.render();
+    doc.querySelector('#openCal').click();
+    assert.equal(L.ui.view, 'calendar');
+    assert.match(doc.querySelector('.cal-title').textContent, /October\s*2026/);
+    assert.equal(doc.querySelector('.cal-day.today').dataset.calDay, '2026-10-07');
+    assert.equal(doc.querySelectorAll('[data-cal-day]').length, 31);
+    assert.ok(doc.querySelector('.nav [data-nav="calendar"]'), 'Calendar is in the menu');
+  });
+
+  test('scheduled payments show on every future day they repeat on', (t) => {
+    const app = makeApp(); t.after(app.close);
+    schedule(app);
+    const ev = app.L.calEvents('2026-10-01', '2026-12-31').map((e) => `${e.date} ${e.label}`);
+    assert.deepEqual([...ev], ['2026-10-25 Salary', '2026-11-01 Rent', '2026-11-25 Salary', '2026-12-01 Rent', '2026-12-25 Salary']);
+    const doc = open(app, '2026-11-10');
+    assert.ok(doc.querySelector('[data-cal-day="2026-11-01"] .mk.bill'));
+    assert.ok(doc.querySelector('[data-cal-day="2026-11-25"] .mk.income'));
+  });
+
+  test('paused payments and reached goals are left out; goal target dates are marked', (t) => {
+    const app = makeApp(); t.after(app.close);
+    schedule(app); app.S.recurring[0].active = false;
+    app.S.goals.push({ id: 'g1', name: 'Laptop', target: 90000, saved: 20000, deadline: '2026-10-29' });
+    app.S.goals.push({ id: 'g2', name: 'Done', target: 100, saved: 100, deadline: '2026-10-20' });
+    const ev = app.L.calEvents('2026-10-01', '2026-11-30');
+    assert.deepEqual([...ev.map((e) => e.label)], ['Salary', 'Laptop', 'Salary']);
+    const doc = open(app);
+    assert.ok(doc.querySelector('[data-cal-day="2026-10-29"] .mk.goal'));
+  });
+
+  test('"Coming up" lists the next 30 days; a row jumps to its day', (t) => {
+    const app = makeApp(); t.after(app.close);
+    schedule(app);
+    const doc = open(app);
+    const rows = [...doc.querySelectorAll('.cal-soon .cal-ev')].map((r) => r.textContent.replace(/\s+/g, ' '));
+    assert.equal(rows.length, 2);
+    assert.match(rows[0], /Salary/); assert.match(rows[1], /Rent/);
+    doc.querySelector('.cal-soon [data-cal-go="2026-11-01"]').click();
+    assert.match(doc.querySelector('.cal-title').textContent, /November\s*2026/);
+    assert.match(doc.querySelector('.cal-sel').textContent, /Rent/);
+  });
+
+  test('month summary: logged money up to today, and bills still to pay', (t) => {
+    const app = makeApp(); t.after(app.close);
+    schedule(app);
+    app.add({ type: 'income', amount: 5000, date: '2026-10-02', categoryId: app.incomeCat().id });
+    app.add({ type: 'expense', amount: 1250, date: '2026-10-05', categoryId: app.expenseCat('Food').id });
+    app.add({ type: 'expense', amount: 999, date: '2026-10-20', categoryId: app.expenseCat('Food').id }); // later this month: not spent yet
+    let sum = open(app).querySelector('.cal-sum').textContent.replace(/\s+/g, ' ');
+    assert.match(sum, /Income\s?Rs\s?5,000/); assert.match(sum, /Spent\s?Rs\s?1,250/); assert.match(sum, /Bills to pay\s?None/);
+    sum = open(app, '2026-11-03').querySelector('.cal-sum').textContent.replace(/\s+/g, ' ');
+    assert.match(sum, /Bills to pay\s?1 · Rs\s?15,000/);
+  });
+
+  test('past days: ✓ for no-spend days, and over / within the daily share with a weekly limit', (t) => {
+    const app = makeApp(); t.after(app.close);
+    app.S.settings.weeklyBudget = 7000; // Rs 1,000 a day
+    app.add({ type: 'expense', amount: 2500, date: '2026-10-05', categoryId: app.expenseCat('Food').id });
+    app.add({ type: 'expense', amount: 300, date: '2026-10-06', categoryId: app.expenseCat('Food').id });
+    const marks = app.L.calDayMarks('2026-10-01', '2026-10-31');
+    assert.equal(marks['2026-10-05'], 'over');
+    assert.equal(marks['2026-10-06'], 'under');
+    assert.equal(marks['2026-10-04'], 'none');
+    assert.equal(marks['2026-10-07'], undefined, 'today is not over yet');
+    assert.equal(marks['2026-10-08'], undefined, 'future days have no mark');
+    const doc = open(app);
+    assert.equal(doc.querySelector('[data-cal-day="2026-10-04"] small').textContent, '✓');
+  });
+
+  test('tapping a day lists it; arrows change the month; Today comes back', (t) => {
+    const app = makeApp(); t.after(app.close);
+    app.add({ type: 'expense', amount: 300, date: '2026-10-03', categoryId: app.expenseCat('Food').id, note: 'Lunch' });
+    const doc = open(app);
+    assert.match(doc.querySelector('.cal-sel').textContent, /Nothing on this day/);
+    doc.querySelector('[data-cal-day="2026-10-03"]').click();
+    assert.match(doc.querySelector('.cal-sel').textContent, /Lunch/);
+    doc.querySelector('[data-cal-move="1"]').click();
+    assert.match(doc.querySelector('.cal-title').textContent, /November\s*2026/);
+    doc.querySelector('#calToday').click();
+    assert.match(doc.querySelector('.cal-title').textContent, /October\s*2026/);
+    assert.equal(doc.querySelector('#calToday'), null);
+  });
+
+  test('legend buttons hide and show a kind of mark', (t) => {
+    const app = makeApp(); t.after(app.close);
+    schedule(app);
+    const doc = open(app);
+    assert.ok(doc.querySelector('[data-cal-day="2026-10-25"] .mk.income'));
+    doc.querySelector('[data-cal-kind="income"]').click();
+    assert.equal(doc.querySelector('[data-cal-day="2026-10-25"] .mk.income'), null);
+    doc.querySelector('[data-cal-kind="income"]').click();
+    assert.ok(doc.querySelector('[data-cal-day="2026-10-25"] .mk.income'));
+  });
+
+  test('weeks start on the day chosen in Settings', (t) => {
+    const app = makeApp(); t.after(app.close);
+    app.S.settings.weekStart = 0; // Sunday; 1 Oct 2026 is a Thursday, so 4 empty boxes come first
+    const doc = open(app);
+    assert.equal(doc.querySelector('.cal-names span').title, 'Sunday');
+    assert.equal(doc.querySelectorAll('.cal-grid > i').length, 4);
+  });
+
+  test('+ Expense on a day opens the form with that date', (t) => {
+    const app = makeApp(); t.after(app.close);
+    const doc = open(app, '2026-10-01');
+    doc.querySelector('[data-cal-add="expense"]').click();
+    assert.equal(doc.querySelector('#fDate').value, '2026-10-01');
+  });
+
+  test('small amounts for the boxes', (t) => {
+    const { L, close } = makeApp(); t.after(close);
+    assert.deepEqual([450, 1000, 1250, 12400, 1500000].map(L.calAmt), ['450', '1k', '1.3k', '12k', '1.5M']);
+  });
+});
+
+/* ------------------------------------------ calendar: balance forecast and payday */
+describe('balance forecast and payday', () => {
+  // Today is Wed 7 Oct 2026. Rs 20,000 in cash; rent of 15,000 on the 10th of every month, salary of 50,000 on the 25th.
+  const setup = () => {
+    const app = makeApp();
+    const { S, cash, expenseCat, incomeCat } = app;
+    cash.initial = 20000;
+    S.recurring.push({ id: 'rent', type: 'expense', amount: 15000, note: 'Rent', categoryId: expenseCat('Rent').id,
+      frequency: 'monthly', nextDate: '2026-10-10', anchorDay: 10, accountId: cash.id, active: true });
+    S.recurring.push({ id: 'pay', type: 'income', amount: 50000, note: 'Salary', categoryId: incomeCat().id,
+      frequency: 'monthly', nextDate: '2026-10-25', anchorDay: 25, accountId: cash.id, active: true });
+    return app;
+  };
+
+  test('the expected balance adds scheduled payments and entries dated later, day by day', (t) => {
+    const app = setup(); t.after(app.close);
+    app.add({ type: 'expense', amount: 2000, date: '2026-10-12', categoryId: app.expenseCat('Food').id }); // planned
+    const fc = app.L.forecast('2026-11-30');
+    assert.equal(fc['2026-10-07'], 20000, 'today: the balance without the entry dated later');
+    assert.equal(fc['2026-10-09'], 20000);
+    assert.equal(fc['2026-10-10'], 5000);
+    assert.equal(fc['2026-10-12'], 3000);
+    assert.equal(fc['2026-10-25'], 53000);
+    assert.equal(fc['2026-11-10'], 38000);
+  });
+
+  test('goal transfers and moves between accounts count the right way', (t) => {
+    const app = setup(); t.after(app.close);
+    const { cash, bank } = app;
+    app.add({ type: 'transfer', amount: 1000, date: '2026-10-08', accountId: cash.id, toAccountId: bank.id });
+    app.add({ type: 'transfer', amount: 3000, date: '2026-10-09', accountId: cash.id, goalId: 'g1' });
+    const fc = app.L.forecast('2026-10-09');
+    assert.equal(fc['2026-10-08'], 20000, 'cash to bank: the total stays the same');
+    assert.equal(fc['2026-10-09'], 17000, 'into a goal: out of the accounts');
+  });
+
+  test('warns about the first day the money runs short', (t) => {
+    const app = setup(); t.after(app.close);
+    app.cash.initial = 10000;
+    const fc = app.L.forecast(app.L.addDays('2026-10-07', 60));
+    assert.equal(app.L.firstShortDay(fc), '2026-10-10');
+    app.L.openCalendar();
+    const warn = app.doc.querySelector('.cal-warn');
+    assert.match(warn.textContent, /Money may run short on Sat, 10 Oct/);
+    assert.ok(app.doc.querySelector('[data-cal-day="2026-10-10"]').classList.contains('short'));
+    warn.click();
+    assert.equal(app.L.ui.cal.sel, '2026-10-10');
+  });
+
+  test('no warning when the money lasts', (t) => {
+    const app = setup(); t.after(app.close);
+    app.L.openCalendar();
+    assert.equal(app.doc.querySelector('.cal-warn'), null);
+    assert.equal(app.doc.querySelector('.cal-day.short'), null);
+  });
+
+  test('payday: the biggest scheduled income, days to go, and money a day after the bills before it', (t) => {
+    const app = setup(); t.after(app.close);
+    app.S.recurring.push({ id: 'side', type: 'income', amount: 2000, note: 'Tutoring', categoryId: app.incomeCat().id,
+      frequency: 'weekly', nextDate: '2026-10-09', anchorDay: 9, accountId: app.cash.id, active: true });
+    const p = app.L.nextPayday();
+    assert.equal(p.label, 'Salary');
+    assert.equal(p.date, '2026-10-25');
+    assert.equal(p.days, 18);
+    // 20,000 - rent 15,000 + tutoring 2,000 x 3 (9, 16, 23 Oct) = 11,000 left on the 24th, over 18 days
+    assert.equal(p.before, 11000);
+    assert.equal(p.perDay, 611.11);
+    app.L.openCalendar();
+    assert.match(app.doc.querySelector('.cal-pay').textContent.replace(/\s+/g, ' '), /18\s?days to payday · Salary/);
+  });
+
+  test('no payday card without scheduled income', (t) => {
+    const app = makeApp(); t.after(app.close);
+    assert.equal(app.L.nextPayday(), null);
+    app.L.openCalendar();
+    assert.equal(app.doc.querySelector('.cal-pay'), null);
+  });
+
+  test('a later day shows its expected balance, and with a weekly limit also after everyday spending', (t) => {
+    const app = setup(); t.after(app.close);
+    app.L.openCalendar('2026-10-12');
+    let fc = app.doc.querySelector('.cal-fc').textContent.replace(/\s+/g, ' ');
+    assert.match(fc, /Expected balance\s?Rs\s?5,000/);
+    assert.doesNotMatch(fc, /everyday spending/);
+    app.S.settings.weeklyBudget = 7000; // Rs 1,000 a day, 5 days from today
+    app.L.render();
+    fc = app.doc.querySelector('.cal-fc').textContent.replace(/\s+/g, ' ');
+    assert.match(fc, /about Rs\s?0/);
+    app.L.openCalendar();
+    assert.match(app.doc.querySelector('.cal-fc').textContent, /Balance now/);
+    app.L.openCalendar('2026-10-01');
+    assert.equal(app.doc.querySelector('.cal-fc'), null, 'past days have no forecast');
+  });
+});
+
+/* ------------------------------------------ calendar: reminders */
+describe('reminders', () => {
+  const rem = (S, o) => { const x = { id: 'm' + S.reminders.length, title: 'School fees', date: '2026-10-14', amount: 3000, dir: 'out', frequency: '', anchorDay: 14, done: false, ...o }; S.reminders.push(x); return x; };
+
+  test('new data and old backups both have a reminders list', (t) => {
+    const { L, S, close } = makeApp(); t.after(close);
+    assert.deepEqual([...S.reminders], []);
+    const old = L.migrate({ settings: {}, transactions: [] });
+    assert.ok(Array.isArray(old.reminders));
+  });
+
+  test('"+ Reminder" on a day opens the form with that date, and Save adds it', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    L.openCalendar('2026-10-14');
+    doc.querySelector('[data-cal-remind]').click();
+    assert.equal(doc.querySelector('#mDate').value, '2026-10-14');
+    doc.querySelector('#mTitle').value = 'Insurance renewal';
+    doc.querySelector('#mAmt').value = '12000';
+    doc.querySelector('#mDir [data-v="out"]').click();
+    doc.querySelector('#mSave').click();
+    assert.equal(S.reminders.length, 1);
+    assert.equal(S.reminders[0].title, 'Insurance renewal');
+    assert.equal(S.reminders[0].amount, 12000);
+    assert.ok(doc.querySelector('[data-cal-day="2026-10-14"] .mk.remind'));
+    assert.match(doc.querySelector('.cal-sel').textContent, /Insurance renewal/);
+  });
+
+  test('a reminder needs a title', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    L.reminderForm({ date: '2026-10-14' });
+    doc.querySelector('#mSave').click();
+    assert.equal(S.reminders.length, 0);
+    assert.ok(doc.querySelector('#mTitle'), 'the form stays open');
+  });
+
+  test('repeating reminders show on every date; amounts count in the expected balance', (t) => {
+    const { L, S, cash, close } = makeApp(); t.after(close);
+    cash.initial = 10000;
+    rem(S, { title: 'Gym', amount: 2000, frequency: 'monthly', date: '2026-10-14' });
+    rem(S, { title: 'Call the bank', amount: 0, date: '2026-10-09' });
+    rem(S, { title: 'Refund', amount: 500, dir: 'in', date: '2026-10-12' });
+    const ev = L.calEvents('2026-10-01', '2026-12-31').filter((e) => e.kind === 'remind').map((e) => `${e.date} ${e.label} ${e.amount}`);
+    assert.deepEqual([...ev], ['2026-10-09 Call the bank 0', '2026-10-12 Refund 500', '2026-10-14 Gym -2000', '2026-11-14 Gym -2000', '2026-12-14 Gym -2000']);
+    const fc = L.forecast('2026-11-30');
+    assert.equal(fc['2026-10-13'], 10500);
+    assert.equal(fc['2026-10-14'], 8500);
+    assert.equal(fc['2026-11-14'], 6500);
+  });
+
+  test('Done: a one-off one is finished, a repeating one moves to its next date', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    const once = rem(S, { title: 'Pay Amal back' });
+    const monthly = rem(S, { title: 'Gym', frequency: 'monthly', date: '2026-10-31', anchorDay: 31 });
+    L.reminderForm(once); doc.querySelector('#mDone').click();
+    assert.equal(once.done, true);
+    assert.equal(L.calEvents('2026-10-01', '2026-12-31').some((e) => e.remId === once.id), false, 'done ones leave the calendar');
+    L.reminderForm(monthly); doc.querySelector('#mDone').click();
+    assert.equal(monthly.date, '2026-11-30');
+    assert.equal(monthly.done, false);
+  });
+
+  test('a passed reminder not marked done is listed first in Coming up as overdue', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    rem(S, { title: 'Electricity bill', date: '2026-10-03' });
+    rem(S, { title: 'School fees', date: '2026-10-14' });
+    L.openCalendar();
+    const rows = [...doc.querySelectorAll('.cal-soon .cal-ev')].map((r) => r.textContent.replace(/\s+/g, ' '));
+    assert.match(rows[0], /Electricity bill.*Overdue/);
+    assert.match(rows[1], /School fees/);
+  });
+
+  test('delete has Undo', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    const x = rem(S, {});
+    L.reminderForm(x); doc.querySelector('#mDel').click();
+    assert.equal(S.reminders.length, 0);
+    doc.querySelector('.toast button').click();
+    assert.equal(S.reminders.length, 1);
+  });
+
+  test('the phone reminds at 9:00 on the day, if the Reminders switch is on', (t) => {
+    const { L, S, close } = makeApp(); t.after(close);
+    S.settings.notify = { ...S.settings.notify, daily: false, bills: false, limit: false, summary: false, reminders: true };
+    rem(S, { title: 'School fees', date: '2026-10-09', amount: 3000 });
+    rem(S, { title: 'Far away', date: '2026-10-30' });
+    let plan = L.planNotifications();
+    assert.equal(plan.length, 1);
+    assert.equal(plan[0].title, '🔔 School fees');
+    assert.match(plan[0].body, /Today: Rs\s?3,000/);
+    assert.equal(plan[0].at.getHours(), 9);
+    assert.equal(plan[0].at.getDate(), 9);
+    S.settings.notify.reminders = false;
+    plan = L.planNotifications();
+    assert.equal(plan.length, 0);
+  });
+
+  test('merging a backup adds its reminders once; done on either side stays done', (t) => {
+    const { L, S, close } = makeApp(); t.after(close);
+    rem(S, { id: 'a', title: 'Mine' });
+    const theirs = JSON.parse(JSON.stringify(S));
+    theirs.reminders[0].done = true;
+    theirs.reminders.push({ id: 'b', title: 'Theirs', date: '2026-10-20', amount: 0, dir: 'out', frequency: '', anchorDay: 20, done: false });
+    const r = L.mergeStates(S, theirs);
+    assert.deepEqual([...r.state.reminders.map((x) => x.id)], ['a', 'b']);
+    assert.equal(r.state.reminders[0].done, true);
+    assert.equal(r.added.reminders, 1);
+    assert.match(L.mergeSummary(r.added), /1 reminder/);
+  });
+});
+
+/* ------------------------------------------ Aesthetic look */
+describe('style: Professional or Aesthetic', () => {
+  test('new data starts Professional; the page has no style mark', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    assert.equal(S.settings.style, 'professional');
+    L.render();
+    assert.equal(doc.documentElement.getAttribute('data-style'), null);
+    assert.equal(doc.querySelector('.wdots'), null, 'the week is bars');
+  });
+
+  test('the welcome screen offers both looks; picking Aesthetic shows it at once and keeps what was typed', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    S.settings.onboarded = false; L.render();
+    const cards = doc.querySelectorAll('[data-style-pick]');
+    assert.equal(cards.length, 2);
+    assert.match(cards[0].textContent, /Professional\s*Recommended/);
+    assert.match(cards[1].textContent, /soft, pretty look, like a planner/);
+    assert.equal(doc.querySelector('[data-style-pick="professional"]').getAttribute('aria-checked'), 'true', 'Professional is picked to start with');
+    doc.querySelector('#wName').value = 'Kezara';
+    doc.querySelector('[data-style-pick="aesthetic"]').click();
+    assert.equal(S.settings.style, 'aesthetic');
+    assert.equal(S.settings.palette, 'pearl', 'its own colours');
+    assert.equal(doc.documentElement.getAttribute('data-style'), 'aesthetic');
+    assert.equal(doc.querySelector('[data-style-pick="aesthetic"]').getAttribute('aria-checked'), 'true');
+    assert.equal(doc.querySelector('#wName').value, 'Kezara', 'the form was not drawn again');
+    doc.querySelector('#wGo').click();
+    assert.equal(L.state.settings.style, 'aesthetic');
+  });
+
+  test('Settings switches the look; a colour theme the person chose is kept', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    L.ui.view = 'settings'; L.render();
+    doc.querySelector('[data-look="aesthetic"]').click();
+    assert.equal(S.settings.style, 'aesthetic');
+    assert.equal(S.settings.palette, 'pearl');
+    doc.querySelector('[data-look="professional"]').click();
+    assert.equal(S.settings.palette, 'forest', 'Pearl came with Aesthetic, so it goes with it');
+    S.settings.palette = 'navy';
+    doc.querySelector('[data-look="aesthetic"]').click();
+    assert.equal(S.settings.palette, 'navy', 'a theme chosen on purpose stays');
+  });
+
+  test('Aesthetic Home: the week as dots with a plain sentence, quick-action labels', (t) => {
+    const { L, S, doc, add, expenseCat, close } = makeApp(); t.after(close); // Wed 7 Oct; week Mon 5 - Sun 11
+    S.settings.weeklyBudget = 7000; // Rs 1,000 a day
+    add({ type: 'expense', amount: 300, date: '2026-10-05', categoryId: expenseCat('Food').id });
+    add({ type: 'expense', amount: 2500, date: '2026-10-06', categoryId: expenseCat('Food').id });
+    L.setStyle('aesthetic'); L.ui.view = 'dashboard'; L.render();
+    const dots = [...doc.querySelectorAll('.wdot')].map((d) => d.className.replace('wdot', '').trim());
+    assert.deepEqual(dots, ['ok', 'over', 'today', 'future', 'future', 'future', 'future']);
+    assert.match(doc.querySelector('.wdot.over').textContent, /2\.5k/);
+    assert.match(doc.querySelector('.wdots-note').textContent, /1 of 2 days so far stayed within your limit/);
+    assert.equal(doc.querySelector('.days'), null, 'no bars');
+  });
+
+  test('Aesthetic Home as designed: dark card, your week, three quick tiles, recently', (t) => {
+    const { L, S, doc, add, expenseCat, close } = makeApp(); t.after(close); // Wed 7 Oct; week Mon 5 - Sun 11
+    S.settings.weeklyBudget = 7000;
+    add({ type: 'expense', amount: 1500, date: '2026-10-05', categoryId: expenseCat('Food').id, note: 'Groceries' });
+    L.setStyle('aesthetic'); L.ui.view = 'dashboard'; L.render();
+    const hero = doc.querySelector('.hero').textContent.replace(/\s+/g, ' ');
+    // Rs 5,500 left over 5 days (today included) = Rs 1,100 today; the other Rs 4,400 is for the rest of the week
+    assert.match(hero, /You can spend today\s?Rs\s?1,100\.00/);
+    assert.match(hero, /Rs\s?4,400 left for the rest of this week/);
+    assert.match(hero, /Rs\s?1,500 spent\s?Limit Rs\s?7,000/);
+    assert.match(doc.querySelector('.home-aes').textContent, /Your week/);
+    assert.deepEqual([...doc.querySelectorAll('.qa-tile')].map((b) => b.textContent.trim()), ['Expense', 'Income', 'Move money']);
+    assert.match(doc.querySelector('.home-aes').textContent, /Recently[\s\S]*Groceries/);
+    assert.equal(doc.querySelector('.stats'), null, 'no Professional stat boxes');
+    doc.querySelector('.qa-tile[data-fab="expense"]').click();
+    assert.equal(doc.querySelector('.modal-head h2').textContent, 'New expense');
+    doc.querySelector('#typeSeg [data-v="income"]').click();
+    assert.equal(doc.querySelector('.modal-head h2').textContent, 'Money in');
+  });
+
+  test('Home has a Settings button in both looks', (t) => {
+    const { L, doc, close } = makeApp(); t.after(close);
+    for (const look of ['professional', 'aesthetic']) {
+      L.setStyle(look); L.ui.view = 'dashboard'; L.render();
+      doc.querySelector('.home-head [data-go="settings"]').click();
+      assert.equal(L.ui.view, 'settings', look);
+    }
+  });
+
+  test('the menu button on the Aesthetic Home opens every other page, Settings too', (t) => {
+    const { L, doc, close } = makeApp(); t.after(close);
+    L.setStyle('aesthetic'); L.render();
+    doc.querySelector('#homeMenu').click();
+    const more = [...doc.querySelectorAll('.more-list [data-nav]')].map((b) => b.dataset.nav);
+    for (const k of ['transactions', 'budgets', 'recurring', 'accounts', 'tools', 'settings']) assert.ok(more.includes(k), k);
+    assert.ok(!more.includes('goals') && !more.includes('calendar'), 'those are on the bar');
+  });
+
+  test('category icons: by name in the add form and the lists, three dots for unknown names', (t) => {
+    const { L, close } = makeApp(); t.after(close);
+    assert.match(L.catIcon('Food & groceries'), /M3 10h18/);
+    assert.match(L.catIcon('Rent & housing'), /M3 10\.5 12 3/);
+    assert.match(L.catIcon('My own thing'), /M5 12h\.01/);
+  });
+
+  test('Aesthetic Home without a limit counts no-spend days', (t) => {
+    const { L, doc, add, expenseCat, close } = makeApp(); t.after(close);
+    add({ type: 'expense', amount: 300, date: '2026-10-05', categoryId: expenseCat('Food').id });
+    L.setStyle('aesthetic'); L.render();
+    assert.match(doc.querySelector('.wdots-note').textContent, /1 no-spend day so far/);
+  });
+
+  test('Aesthetic Reports: no charts, a plain sentence instead', (t) => {
+    const { L, doc, add, expenseCat, incomeCat, close } = makeApp(); t.after(close);
+    add({ type: 'income', amount: 10000, date: '2026-10-01', categoryId: incomeCat().id });
+    add({ type: 'expense', amount: 3000, date: '2026-10-02', categoryId: expenseCat('Food').id });
+    add({ type: 'expense', amount: 1000, date: '2026-10-03', categoryId: expenseCat('Transport').id });
+    L.ui.view = 'reports'; L.ui.reportPeriod = 'month'; L.render();
+    assert.ok(doc.querySelectorAll('.chart, svg.bars, .bar-chart').length || /Income and expenses by month/.test(doc.body.textContent), 'Professional has its charts');
+    L.setStyle('aesthetic'); L.render();
+    const text = doc.querySelector('.page').textContent.replace(/\s+/g, ' ');
+    assert.doesNotMatch(text, /Income and expenses by month|Spending by day|Which days cost you most/);
+    assert.match(doc.querySelector('.hero').textContent.replace(/\s+/g, ' '), /You spent\s?Rs\s?4,000\.00\s?Most of it went on Food & groceries \(75%\)\.\s*$/);
+    assert.match(doc.querySelector('.kept').textContent, /You kept Rs\s?6,000\.00/);
+    assert.match(text, /Where it went/);
+    assert.ok(doc.querySelector('.donut'));
+    doc.querySelector('#rp [data-v="year"]').click();
+    assert.equal(L.ui.reportPeriod, 'year');
+  });
+
+  test('the look is per device: it never syncs', (t) => {
+    const { close } = makeApp(); t.after(close);
+    const core = fs.readFileSync(new URL('../web/sync-core.js', import.meta.url), 'utf8');
+    assert.match(core, /LOCAL_SETTINGS = \[[^\]]*'style'/);
+  });
+});
+
+describe('Aesthetic look: the tab bar and the ring chart', () => {
+  test('the phone bar holds Home, Calendar, +, Spending and Goals (styles.css shows them in that order)', (t) => {
+    const { L, doc, close } = makeApp(); t.after(close);
+    L.setStyle('aesthetic'); L.render();
+    const shown = [...doc.querySelectorAll('.nav > button:not(.phone-hide):not(.more-btn)')].map((b) => b.id === 'navAdd' ? '+' : b.textContent.trim());
+    assert.deepEqual(shown.sort(), ['+', 'Calendar', 'Goals', 'Home', 'Spending']);
+    const css = fs.readFileSync(new URL('../web/styles.css', import.meta.url), 'utf8');
+    assert.match(css, /\.nav \.more-btn \{ display: none; \}/, 'More is hidden on the Aesthetic bar');
+  });
+
+  test('Aesthetic Goals: big cards with a % and a friendly tip, and a dashed "Start a new goal"', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    S.goals.push({ id: 'g1', name: 'New laptop', target: 90000, saved: 20000, deadline: '2026-12-30' });
+    S.goals.push({ id: 'g2', name: 'Trip', target: 10000, saved: 8000 });
+    L.setStyle('aesthetic'); L.ui.view = 'goals'; L.render();
+    const cards = [...doc.querySelectorAll('.goal-card')].map((c) => c.textContent.replace(/\s+/g, ' '));
+    assert.match(cards[0], /New laptop.*22%.*Rs\s?20,000 saved.*of Rs\s?90,000.*Put aside Rs\s?5,833 a week/);
+    assert.match(cards[1], /80%.*Almost there! Only Rs\s?2,000 to go/);
+    doc.querySelector('#addGoal').click();
+    assert.ok(doc.querySelector('.modal'), 'the new-goal form opens');
+  });
+
+  test('Aesthetic Settings: Style as two big rows', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    L.setStyle('aesthetic'); L.ui.view = 'settings'; L.render();
+    const rows = doc.querySelectorAll('.look-row');
+    assert.equal(rows.length, 2);
+    assert.equal(doc.querySelector('.look-row.on').dataset.look, 'aesthetic');
+    doc.querySelector('.look-row[data-look="professional"]').click();
+    assert.equal(S.settings.style, 'professional');
+    assert.equal(doc.querySelectorAll('.look-row').length, 2, 'the same two rows in Professional');
+    assert.match(doc.querySelector('.look-row[data-look="professional"]').textContent, /Recommended[\s\S]*simple, professional look/);
+    assert.doesNotMatch(doc.querySelector('.look-row[data-look="aesthetic"]').textContent, /Recommended/);
+  });
+
+  test('the + in the bar opens the quick actions and closes them again', (t) => {
+    const { L, doc, close } = makeApp(); t.after(close);
+    L.setStyle('aesthetic'); L.render();
+    const add = doc.querySelector('#navAdd');
+    add.click();
+    assert.ok(doc.querySelector('#fabWrap').classList.contains('open'));
+    assert.equal(add.getAttribute('aria-expanded'), 'true');
+    add.click();
+    assert.ok(!doc.querySelector('#fabWrap').classList.contains('open'));
+  });
+
+  test('Professional keeps its own bar and has no + in it', (t) => {
+    const { L, doc, close } = makeApp(); t.after(close);
+    L.render();
+    assert.equal(doc.querySelector('#navAdd'), null);
+    const shown = [...doc.querySelectorAll('.nav > button:not(.phone-hide)')].map((b) => b.textContent.trim());
+    assert.deepEqual(shown, ['This week', 'Transactions', 'Budgets', 'Reports', 'More']);
+  });
+
+  test('Spending shows a ring: 5 biggest categories plus "Everything else", each a different colour', (t) => {
+    const { L, S, doc, add, close } = makeApp(); t.after(close);
+    const cats = S.categories.filter((c) => c.type === 'expense');
+    [5000, 3000, 2000, 1000, 600, 300, 100].forEach((v, i) => add({ type: 'expense', amount: v, date: '2026-10-02', categoryId: cats[i].id }));
+    L.setStyle('aesthetic'); L.ui.view = 'reports'; L.ui.reportPeriod = 'month'; L.render();
+    assert.match(doc.querySelector('.head h1').textContent, /Your spending/);
+    const arcs = [...doc.querySelectorAll('.donut circle')];
+    assert.equal(arcs.length, 6);
+    assert.equal(new Set(arcs.map((c) => c.getAttribute('stroke'))).size, 6);
+    const legend = [...doc.querySelectorAll('.dl')].map((x) => x.textContent.replace(/\s+/g, ' ').trim());
+    assert.match(legend[5], /Everything else\s?Rs\s?400\s?3%/);
+    assert.match(doc.querySelector('.donut-mid').textContent, /Rs\s?12,000/);
+  });
+
+  test('one category fills the whole ring', (t) => {
+    const { L, doc, add, expenseCat, close } = makeApp(); t.after(close);
+    add({ type: 'expense', amount: 500, date: '2026-10-02', categoryId: expenseCat('Rent').id });
+    L.setStyle('aesthetic'); L.ui.view = 'reports'; L.ui.reportPeriod = 'month'; L.render();
+    const arc = doc.querySelector('.donut circle');
+    const [len] = arc.getAttribute('stroke-dasharray').split(' ').map(Number);
+    assert.ok(Math.abs(len - 2 * Math.PI * 70) < 0.1);
+  });
+});

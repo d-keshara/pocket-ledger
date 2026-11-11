@@ -63,7 +63,13 @@ Designed and developed by D. Kezara.
 - Web version: https://d-keshara.github.io/pocket-ledger/
 - Delete account (Play Console > App content > Data safety > "Delete account URL"): https://d-keshara.github.io/pocket-ledger/account.html?mode=deleteAccount
 
-## What's new in 1.9.5 (release notes, max 500)
+## What's new in 1.9.6 (release notes, max 500)
+New: Calendar page with your bills, payday countdown, goal dates and your own reminders, with a warning if money may run short.
+New: Aesthetic style, a soft planner look with a colourful spending chart. Choose it in Settings → Style.
+New: send an idea or report a problem from Settings → Feedback.
+Better: reminders are on for new installs, and Settings is one tap away on the home page.
+
+## What's new in 1.9.5, kept for reference (release notes, max 500)
 New: the home page now shows how much went on fixed costs like bills, which don't count toward your weekly limit.
 New: "Not in weekly limit" label under those categories in "Where this week's money went".
 Better: budgets show as tidy one-line rows; tap one to edit or delete it.
