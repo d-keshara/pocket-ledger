@@ -3,7 +3,7 @@
 'use strict';
 
 /* ================= constants ================= */
-const APP_VERSION = '1.9.9';
+const APP_VERSION = '1.9.10';
 const AUTHOR = 'D. Kezara';
 const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948', '#5f6b66', '#0f6b5c'];
 const CURRENCIES = [
@@ -2544,7 +2544,9 @@ function scheduleNotifications() {
       else if (notifySettings().limitWarnAt > today()) state.settings.notify = { ...notifySettings(), limitWarnAt: '' };
       const { notifications: pending = [] } = await LN.getPending();
       if (pending.length) await LN.cancel({ notifications: pending.map((x) => ({ id: x.id })) });
-      if (plan.length) await LN.schedule({ notifications: plan.map((x) => ({ id: x.id, title: x.title, body: x.body, schedule: { at: x.at, allowWhileIdle: true } })) });
+      // isExactNotification: false, or the plugin opens Android's "Alarms & reminders" page on every start
+      // (the app doesn't ask for exact alarms, so it isn't listed there and the page comes back each time).
+      if (plan.length) await LN.schedule({ notifications: plan.map((x) => ({ id: x.id, title: x.title, body: x.body, isExactNotification: false, schedule: { at: x.at, allowWhileIdle: true } })) });
     } catch (e) { console.error('Notifications', e); }
   }, 1000);
 }

@@ -903,6 +903,19 @@ describe('phone notifications (Android app)', () => {
     }
   });
 
+  test('notifications never ask for exact alarms (else Android opens "Alarms & reminders" on every start)', async (t) => {
+    const { w, L, close } = makeApp(); t.after(close);
+    let sent = null;
+    w.Capacitor = { isNativePlatform: () => true, Plugins: { LocalNotifications: {
+      checkPermissions: async () => ({ display: 'granted' }), requestPermissions: async () => ({ display: 'granted' }),
+      getPending: async () => ({ notifications: [] }), cancel: async () => {}, schedule: async (o) => { sent = o.notifications; },
+    } } };
+    await L.firstRunNotifications();
+    await new Promise((r) => setTimeout(r, 1200)); // scheduleNotifications waits a second
+    assert.ok(sent?.length, 'something was planned');
+    assert.ok(sent.every((x) => x.isExactNotification === false));
+  });
+
   test('daily reminder: 7 evenings at the chosen time, but not tonight if something was added today', (t) => {
     const { L, S, add, expenseCat, close } = makeApp(); t.after(close);
     on(S, { daily: true, dailyTime: '21:30' });
