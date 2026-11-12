@@ -882,38 +882,83 @@ describe('phone notifications (Android app)', () => {
   const on = (S, o) => { S.settings.notify = { ...S.settings.notify, daily: false, bills: false, limit: false, summary: false, ...o }; };
   const when = (x) => `${x.at.getFullYear()}-${String(x.at.getMonth() + 1).padStart(2, '0')}-${String(x.at.getDate()).padStart(2, '0')} ${String(x.at.getHours()).padStart(2, '0')}:${String(x.at.getMinutes()).padStart(2, '0')}`;
 
-  test('a new install starts with every switch on; with all off, nothing is planned', (t) => {
-    const { L, S, close } = makeApp(); t.after(close);
-    const n = S.settings.notify;
-    assert.deepEqual([n.daily, n.bills, n.limit, n.summary], [true, true, true, true]);
-    on(S, {});
-    assert.equal(L.planNotifications().length, 0);
-  });
-
-  test('after the welcome screen the phone asks for permission; a no turns every switch off', async (t) => {
-    for (const answer of ['granted', 'denied']) {
-      const { w, L, S, close } = makeApp(); t.after(close);
-      w.Capacitor = { isNativePlatform: () => true, Plugins: { LocalNotifications: {
-        checkPermissions: async () => ({ display: 'prompt' }), requestPermissions: async () => ({ display: answer }),
-        getPending: async () => ({ notifications: [] }), cancel: async () => {}, schedule: async () => {},
-      } } };
-      await L.firstRunNotifications();
-      const n = S.settings.notify;
-      assert.deepEqual([n.daily, n.bills, n.limit, n.summary], answer === 'granted' ? [true, true, true, true] : [false, false, false, false]);
-    }
-  });
-
-  test('notifications never ask for exact alarms (else Android opens "Alarms & reminders" on every start)', async (t) => {
-    const { w, L, close } = makeApp(); t.after(close);
-    let sent = null;
+  // A phone where Android says `answer` when asked; `sent` collects what was scheduled.
+  const phone = (w, answer = 'granted') => {
+    const log = { asked: 0, sent: null };
     w.Capacitor = { isNativePlatform: () => true, Plugins: { LocalNotifications: {
-      checkPermissions: async () => ({ display: 'granted' }), requestPermissions: async () => ({ display: 'granted' }),
-      getPending: async () => ({ notifications: [] }), cancel: async () => {}, schedule: async (o) => { sent = o.notifications; },
+      // Like Android: 'prompt' until asked, then whatever the person answered.
+      checkPermissions: async () => ({ display: log.asked ? answer : 'prompt' }), requestPermissions: async () => { log.asked++; return { display: answer }; },
+      getPending: async () => ({ notifications: [] }), cancel: async () => {}, schedule: async (o) => { log.sent = o.notifications; },
     } } };
-    await L.firstRunNotifications();
-    await new Promise((r) => setTimeout(r, 1200)); // scheduleNotifications waits a second
-    assert.ok(sent?.length, 'something was planned');
-    assert.ok(sent.every((x) => x.isExactNotification === false));
+    return log;
+  };
+  const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
+
+  test('a new install starts with every switch off, so nothing is planned and nothing is asked', async (t) => {
+    const { w, L, S, doc, close } = makeApp(); t.after(close);
+    const n = S.settings.notify;
+    assert.deepEqual([n.daily, n.bills, n.limit, n.summary, n.reminders], [false, false, false, false, false]);
+    assert.equal(L.planNotifications().length, 0);
+    const log = phone(w);
+    S.settings.onboarded = false; L.render();
+    doc.querySelector('#wGo').click();
+    await tick(1200);
+    assert.equal(log.asked, 0, 'the welcome screen does not ask for permission');
+    assert.equal(log.sent, null, 'nothing scheduled');
+  });
+
+  test('turning a switch on asks Android; allowed, it is planned without exact alarms (no special settings page)', async (t) => {
+    const { w, L, S, doc, close } = makeApp(); t.after(close);
+    const log = phone(w);
+    L.ui.view = 'settings'; L.render();
+    const box = doc.querySelector('[data-notify="daily"]');
+    box.checked = true; box.onchange();
+    await tick(1200); // scheduleNotifications waits a second
+    assert.equal(log.asked, 1);
+    assert.equal(box.checked, true);
+    assert.equal(S.settings.notify.daily, true);
+    assert.ok(log.sent?.length, 'something was planned');
+    assert.ok(log.sent.every((x) => x.isExactNotification === false));
+  });
+
+  test('after an update: switches on but notifications not allowed any more turns them off, and nothing is scheduled', async (t) => {
+    const { w, L, S, close } = makeApp(); t.after(close);
+    on(S, { daily: true, reminders: true });
+    const log = phone(w);
+    w.Capacitor.Plugins.LocalNotifications.checkPermissions = async () => ({ display: 'denied' });
+    L.render(); L.scheduleNotifications();
+    await tick(1300);
+    assert.equal(S.settings.notify.daily, false);
+    assert.equal(S.settings.notify.reminders, false);
+    assert.equal(log.sent, null, 'nothing scheduled');
+    assert.equal(log.asked, 0, 'no popup on its own');
+  });
+
+  test('after an update: switches on and still allowed keep working, without exact alarms', async (t) => {
+    const { w, L, S, close } = makeApp(); t.after(close);
+    on(S, { daily: true });
+    const log = phone(w);
+    w.Capacitor.Plugins.LocalNotifications.checkPermissions = async () => ({ display: 'granted' });
+    L.scheduleNotifications();
+    await tick(1300);
+    assert.equal(S.settings.notify.daily, true);
+    assert.ok(log.sent?.length && log.sent.every((x) => x.isExactNotification === false));
+  });
+
+  test('a reminder’s "Remind me on my phone" box turns on Your reminders after Android allows it', async (t) => {
+    for (const answer of ['granted', 'denied']) {
+      const { w, L, S, doc, close } = makeApp(); t.after(close);
+      const log = phone(w, answer);
+      L.reminderForm();
+      doc.querySelector('#mTitle').value = 'School fees';
+      const box = doc.querySelector('#mPhone');
+      assert.equal(box.checked, false, 'off to start with');
+      box.checked = true;
+      await doc.querySelector('#mSave').onclick();
+      assert.equal(log.asked, 1);
+      assert.equal(S.settings.notify.reminders, answer === 'granted');
+      assert.equal(S.reminders.length, 1, 'the reminder is saved either way');
+    }
   });
 
   test('daily reminder: 7 evenings at the chosen time, but not tonight if something was added today', (t) => {

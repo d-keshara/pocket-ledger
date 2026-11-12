@@ -164,8 +164,8 @@ function defaultState() {
       reviewAsked: '', // the day we last asked Google Play to show the "rate this app" stars
       style: 'professional', // the look: 'professional' or 'aesthetic' (soft, like a planner). Each device has its own.
       // Phone notifications (Android app only). Kept on this device, not synced: each phone has its own.
-      // All on for a new install; Android asks for permission after the welcome screen (firstRunNotifications).
-      notify: { daily: true, dailyTime: '20:00', bills: true, limit: true, summary: true, reminders: true, limitWarnAt: '' } },
+      // All off for a new install: turning one on asks Android for permission then (turnOnNotify). No exact alarms.
+      notify: { daily: false, dailyTime: '20:00', bills: false, limit: false, summary: false, reminders: false, limitWarnAt: '' } },
     accounts: [
       { id: uid(), name: 'Cash', initial: 0, color: PALETTE[2] },
       { id: uid(), name: 'Bank account', initial: 0, color: PALETTE[0] },
@@ -1081,7 +1081,8 @@ function reminderForm(saved = {}) {
       </div>
       <label class="field"><span>Amount (${esc(state.settings.symbol)}) <span class="muted" style="font-weight:400">(optional)</span></span><input class="input calc" id="mAmt" type="text" inputmode="decimal" autocomplete="off" value="${r.amount || ''}" placeholder="0"></label>
       <div class="seg" id="mDir" role="radiogroup" aria-label="Money out or in">${[['out', 'Money out'], ['in', 'Money in']].map(([v, l]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${dir === v}" class="${dir === v ? 'on' : ''}">${l}</button>`).join('')}</div>
-      <p class="hint" style="margin:0">With an amount, it counts in the expected balance on the Calendar.${isNativeApp() ? ' Your phone reminds you at 9:00 that morning.' : ''}</p>
+      <p class="hint" style="margin:0">With an amount, it counts in the expected balance on the Calendar.</p>
+      ${isNativeApp() ? `<label class="set-row" style="padding:0"><span class="set-label"><b>Remind me on my phone</b><span class="hint">At 9:00 that morning, for all your reminders</span></span><input type="checkbox" class="switch" id="mPhone" ${notifySettings().reminders ? 'checked' : ''} aria-label="Remind me on my phone"></label>` : ''}
     </div>`,
     foot: `${isEdit ? '<button class="btn danger left" id="mDel">Delete</button>' : ''}${isEdit && !r.done ? `<button class="btn" id="mDone">Done</button>` : ''}
       <button class="btn" data-close>Cancel</button><button class="btn primary" id="mSave">Save</button>`,
@@ -1098,9 +1099,11 @@ function reminderForm(saved = {}) {
         const frequency = $('#mRep', m).value;
         const rec = { title, date, amount, dir, frequency, anchorDay: parseISO(date).getDate(), done: isEdit && date === r.date ? !!r.done : false };
         if (isEdit) Object.assign(state.reminders.find((x) => x.id === r.id), rec); else state.reminders.push({ id: uid(), ...rec });
+        // The phone box is the same switch as Settings → Notifications → Your reminders.
+        const phone = $('#mPhone', m)?.checked;
         save(); closeModal(); render(); toast('Reminder saved');
-        // The first reminder on the phone: make sure Android lets the app show it.
-        if (isNativeApp() && notifySettings().reminders && !(await allowNotifications())) toast('Notifications are off for Pocket Ledger, so the phone can’t remind you. Turn them on in your phone’s Settings → Apps.');
+        if (phone && !notifySettings().reminders) await turnOnNotify('reminders');
+        else if (phone === false && notifySettings().reminders) { state.settings.notify = { ...notifySettings(), reminders: false }; save(); }
       };
       const done = $('#mDone', m);
       if (done) done.onclick = () => {
@@ -2299,8 +2302,9 @@ function bindWelcome() {
   const signUp = $('#wSignUp'); if (signUp) signUp.onclick = () => accountForm('signup');
   $('#wName').focus();
 }
-/* After the welcome form: the style popup (while Aesthetic is on), then the notification question. */
-function afterWelcome() { if (FEATURES.aesthetic) styleChooser(firstRunNotifications); else firstRunNotifications(); }
+/* After the welcome form: the style popup (while Aesthetic is on). Notifications start off and ask for
+   permission only when the person turns one on (Settings → Notifications, or a reminder's phone box). */
+function afterWelcome() { if (FEATURES.aesthetic) styleChooser(); }
 /* Right after the welcome form: pick a look. Tapping a card applies it and closes; closing keeps Professional.
    `then` runs once it's closed (the phone's notification question), so the two never show at the same time. */
 function styleChooser(then = () => {}) {
@@ -2536,7 +2540,14 @@ function scheduleNotifications() {
   clearTimeout(notifyTimer);
   notifyTimer = setTimeout(async () => {
     try {
-      const plan = planNotifications();
+      let plan = planNotifications();
+      // Switches on but Android no longer allows notifications (turned off in the phone's settings, or never asked
+      // after an update): turn the switches off so Settings tells the truth; turning one on asks again.
+      if (plan.length && (await LN.checkPermissions()).display !== 'granted') {
+        state.settings.notify = { ...notifySettings(), daily: false, bills: false, limit: false, summary: false, reminders: false };
+        save(); if (ui.view === 'settings') render();
+        plan = [];
+      }
       const warn = plan.find((x) => x.id === 300);
       // Remember the day the limit warning shows, so it comes once a week (saved with the next change).
       // Planned but no longer needed (an expense was deleted): forget it, so it can still come later this week.
@@ -2559,14 +2570,6 @@ async function allowNotifications() {
     return p.display === 'granted';
   } catch { return false; }
 }
-/* Phone app, right after the welcome screen: the switches start on, so ask Android for permission now.
-   If the person says no, turn them all off, so Settings doesn't show switches that can't work. */
-async function firstRunNotifications() {
-  if (!isNativeApp()) return;
-  if (await allowNotifications()) return scheduleNotifications(); // plan again now that they're allowed
-  state.settings.notify = { ...notifySettings(), daily: false, bills: false, limit: false, summary: false, reminders: false };
-  save();
-}
 function notifyPanel() {
   if (!isNativeApp()) return '';
   const n = notifySettings();
@@ -2581,15 +2584,21 @@ function notifyPanel() {
     ${row('reminders', 'Your reminders', 'At 9:00 on the day of each reminder you add on the Calendar.')}
   </div><p class="hint set-foot">Your phone shows these itself. Nothing is sent anywhere.</p></section>`;
 }
+/* Turns one kind of phone notification on, after Android allows it (Android 13+ asks; older versions just allow).
+   Never asks for exact alarms, so no version sends the person to a special settings page. False if not allowed. */
+async function turnOnNotify(key) {
+  if (!(await allowNotifications())) {
+    toast('Notifications are off for Pocket Ledger. Turn them on in your phone’s Settings → Apps → Pocket Ledger → Notifications.');
+    return false;
+  }
+  state.settings.notify = { ...notifySettings(), [key]: true }; save();
+  return true;
+}
 function bindNotifyPanel(root) {
   $$('[data-notify]', root).forEach((box) => box.onchange = async () => {
-    if (box.checked && !(await allowNotifications())) {
-      box.checked = false;
-      return toast('Notifications are off for Pocket Ledger. Turn them on in your phone’s Settings → Apps.');
-    }
-    state.settings.notify = { ...notifySettings(), [box.dataset.notify]: box.checked };
+    if (box.checked) box.checked = await turnOnNotify(box.dataset.notify);
+    else { state.settings.notify = { ...notifySettings(), [box.dataset.notify]: false }; save(); }
     if (box.dataset.notify === 'daily') $('#notifyTime', root).disabled = !box.checked;
-    save();
   });
   const time = $('#notifyTime', root);
   if (time) time.onchange = () => { if (time.value) { state.settings.notify = { ...notifySettings(), dailyTime: time.value }; save(); } };
@@ -2825,9 +2834,9 @@ if (window.__LEDGER_TEST__) {
     get state() { return state; }, set state(v) { state = v; }, ui,
     defaultState, migrate, mergeStates, restoreBox, mergeSummary, render, money, esc, addDays, addMonths, daysBetween, weekStartOf, toISO, parseISO,
     weekInfo, accountBalance, totalBalance, postDueRecurring, nextOccurrence, budgetStatus, filteredTx,
-    periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner, checkPlayUpdate, versionFromCode, drawBarChart, fabOnScroll, planNotifications, notifyPanel,
+    periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner, checkPlayUpdate, versionFromCode, drawBarChart, fabOnScroll, planNotifications, scheduleNotifications, notifyPanel,
     calcEval, toolMath, calcPad, settleCalc,
-    cloudPanel, accountForm, confirmMerge, syncLine, onCloudChange, renderSoon, backupDue, saveBackup, snoozeBackup, reviewDue, askForReview, firstRunNotifications, openPlayPage, FEATURES, afterWelcome, setStyle, weekDots, reportSentence, donutChart, phoneBar, catIcon, viewHomeAes, greetingHtml, styleChooser, feedbackForm, feedbackMail, FEEDBACK_EMAIL, viewCalendar, openCalendar, calEvents, calDayMarks, calAmt, forecast, firstShortDay, nextPayday, dailySpend, reminderForm, remAmount, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
+    cloudPanel, accountForm, confirmMerge, syncLine, onCloudChange, renderSoon, backupDue, saveBackup, snoozeBackup, reviewDue, askForReview, openPlayPage, turnOnNotify, FEATURES, afterWelcome, setStyle, weekDots, reportSentence, donutChart, phoneBar, catIcon, viewHomeAes, greetingHtml, styleChooser, feedbackForm, feedbackMail, FEEDBACK_EMAIL, viewCalendar, openCalendar, calEvents, calDayMarks, calAmt, forecast, firstShortDay, nextPayday, dailySpend, reminderForm, remAmount, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
   };
 } else {
   let booted = false;
