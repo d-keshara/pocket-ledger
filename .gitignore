@@ -40,3 +40,6 @@ android/.idea/
 images/
 *.iml
 store/promo/
+
+# Personal money data copied out for the 2026-11-12 recovery. Never commit.
+recovery-*/

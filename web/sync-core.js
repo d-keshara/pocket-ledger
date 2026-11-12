@@ -179,11 +179,21 @@
    * `api.listen` calls onReady once it has sent what was already in the cloud; only then does this
    * device send its own changes, so it hears about other devices' edits and deletions first.
    * `store` keeps the snapshot between runs: load(uid), save(uid, meta), clear(uid), lastUid(), setLastUid(uid). */
+  /* A device asking to delete a big part of the account at once almost always had its data reset (a fresh start,
+   * cleared app data, an old copy) while it still remembered the account's records. Sending that would wipe the
+   * account on every device, so it is never sent; the device downloads the account again instead (like a first
+   * sync: merged, nothing deleted). "Erase all data" while signed in says so first with allowBulkDelete(). */
+  const BULK_MIN = 5;
+  function looksLikeReset(snapshot, diff) {
+    const synced = Object.keys(snapshot).filter((k) => k !== SETTINGS_KEY).length;
+    return diff.deletes.length >= BULK_MIN && diff.deletes.length * 2 >= synced;
+  }
   const OVERLAP_MS = 2 * 60 * 1000; // ask again for changes from just before the last one seen, in case of clock edges
   const BATCH = 400;                // Firestore allows 500 writes in one batch
 
   function createEngine({ api, hooks, store, uid, onStatus = () => {}, debounceMs = 1200, retryMs = 30000, overlapMs = OVERLAP_MS, readyTimeoutMs = 15000 }) {
     let meta = null; let running = false; let unlisten = null; let live = false; let relisten = null;
+    let bulkAllowed = false; // "Erase all data" while signed in: the next push may delete everything
     let pushing = false; let pushAgain = false; let timer = null; let retry = null; let offlineTimer = null;
     const status = { state: 'starting', lastSynced: 0, error: null };
     const set = (state, error = null) => {
@@ -197,7 +207,7 @@
 
     /* Changes from other devices (or the first download). */
     function onRemote(list, docs) {
-      if (!running) return;
+      if (!running || !meta) return; // downloading the account again (see looksLikeReset): that brings it all
       const state = hooks.getState(); let changed = false;
       for (const { id, data } of docs) {
         meta.since = Math.max(meta.since || 0, toMs(data));
@@ -286,7 +296,13 @@
       try {
         for (let round = 0; round < 20 && running; round++) {
           pushAgain = false;
-          const diff = diffState(meta.snapshot, hooks.getState());
+          let diff = diffState(meta.snapshot, hooks.getState());
+          if (!bulkAllowed && looksLikeReset(meta.snapshot, diff)) {
+            console.warn(`Sync: this device would delete ${diff.deletes.length} records at once; downloading the account again instead`);
+            meta = null; store.clear(uid);
+            if (!(await firstSync())) return;
+            diff = diffState(meta.snapshot, hooks.getState());
+          }
           if (!diff.upserts.length && !diff.deletes.length) break;
           set('syncing');
           clearTimeout(offlineTimer);
@@ -303,6 +319,7 @@
           if (!pushAgain) break;
         }
         clearTimeout(offlineTimer);
+        bulkAllowed = false;
         if (running) set('synced');
       } catch (e) {
         clearTimeout(offlineTimer);
@@ -315,8 +332,9 @@
     }
 
     function changed() { if (!running) return; clearTimeout(timer); timer = setTimeout(push, debounceMs); }
+    function allowBulkDelete() { bulkAllowed = true; }
 
-    return { start, stop, changed, push, status: () => ({ ...status }), get meta() { return meta; } };
+    return { start, stop, changed, push, allowBulkDelete, status: () => ({ ...status }), get meta() { return meta; } };
   }
 
   /* ================= Firestore ================= *
@@ -395,6 +413,6 @@
 
   root.PocketSync = {
     LISTS, LOCAL_SETTINGS, SETTINGS_KEY, stable, hash, snapshotOf, diffState,
-    strip, applyRemote, commitSnapshot, chunkDiff, remoteToState, createEngine, makeFirestoreAdapter, forgetSync, SIGNED_OUT,
+    strip, applyRemote, commitSnapshot, chunkDiff, looksLikeReset, remoteToState, createEngine, makeFirestoreAdapter, forgetSync, SIGNED_OUT,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

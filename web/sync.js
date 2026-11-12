@@ -191,6 +191,8 @@
     attach: (h) => { hooks = h; if (user) startSync(); },
     /* app.js calls this after every save; the engine sends the change a moment later. */
     changed: () => { if (engine) engine.changed(); },
+    /* "Erase all data" while signed in: the person asked to delete everything in the account too. */
+    allowBulkDelete: () => { if (engine) engine.allowBulkDelete(); },
     onChange: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
     /* Called once when the app starts: only loads Firebase if someone signed in here before. */
     start: () => { if (config && flag.get()) load().catch(() => {}); },

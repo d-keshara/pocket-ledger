@@ -2452,7 +2452,7 @@ function bindSettings(root) {
   };
   $('#reset', root).onclick = () => confirmBox('Erase all data?', cloud()?.info().signedIn
     ? 'Every transaction, budget, goal and setting will be deleted from this device <b>and from your account, so also from your other devices</b>. Save a backup first if you might want it back.'
-    : 'Every transaction, budget, goal and setting will be deleted from this device. Save a backup first if you might want it back.', 'Erase everything', () => { state = defaultState(); save(); ui.view = 'dashboard'; render(); });
+    : 'Every transaction, budget, goal and setting will be deleted from this device. Save a backup first if you might want it back.', 'Erase everything', () => { cloud()?.allowBulkDelete(); state = defaultState(); save(); ui.view = 'dashboard'; render(); });
   if (hasApi()) window.pywebview.api.data_location().then((p) => { const el = $('#dataLoc'); if (el) el.textContent = 'Saved automatically to ' + p; });
   else $('#dataLoc', root).textContent = isNativeApp() ? 'Saved automatically on this phone.' : 'Saved automatically in this browser.';
   bindCloud(root);
@@ -2774,10 +2774,11 @@ function restoreBox(data) {
     title: 'Restore this backup?',
     body: `<p style="margin:0">It has ${plural(data.transactions.length, 'transaction')}.</p>
       <p class="hint" style="margin-top:10px"><b>Merge</b> keeps everything on this device and adds what’s new from the backup.
-      <b>Replace</b> deletes what’s on this device and uses the backup instead.</p>`,
+      <b>Replace</b> deletes what’s on this device${cloud()?.info().signedIn ? ' <b>and in your account</b>' : ''} and uses the backup instead.</p>`,
     foot: `<button class="btn" data-close>Cancel</button><button class="btn danger" id="rReplace">Replace my data</button><button class="btn primary" id="rMerge">Merge</button>`,
     onMount: (m) => {
-      $('#rReplace', m).onclick = () => { closeModal(); state = migrate(data); finish('Backup restored'); };
+      // Signed in: the person chose to replace the account's data too, so sync may delete what isn't in the backup.
+      $('#rReplace', m).onclick = () => { closeModal(); cloud()?.allowBulkDelete(); state = migrate(data); finish('Backup restored'); };
       $('#rMerge', m).onclick = () => { closeModal(); const r = mergeStates(state, migrate(data)); state = r.state; finish(mergeSummary(r.added)); };
     },
   });

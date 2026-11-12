@@ -530,6 +530,75 @@ describe('sync: fixes from the bug review', () => {
   });
 });
 
+describe('sync: a device whose data was reset never wipes the account', () => {
+  // What happened on 2026-11-12: an emulator signed in long ago kept its notes of the account's records,
+  // its data was reset for testing, and on signing in again it sent "deleted" for everything.
+  const fill = (d) => {
+    Object.assign(d.S.settings, { name: 'Kezara', weeklyBudget: 10000, onboarded: true });
+    d.S.accounts[1].initial = 16000;
+    for (let i = 1; i <= 8; i++) d.S.transactions.push(tx('t' + i, 100 * i, { categoryId: d.S.categories[0].id, accountId: d.S.accounts[0].id }));
+  };
+
+  test('reset data + old notes: nothing is deleted, the account comes back on that device', async (t) => {
+    const cloud = pretendCloud(); const store = new Map();
+    const a = device(cloud, { store }); const b = device(cloud); t.after(() => { a.close(); b.close(); });
+    fill(a); await a.signIn(); await b.signIn();
+    a.signOut(); // app closed; the notes stay
+    a.L.state = a.L.defaultState(); Object.assign(a.S.settings, { onboarded: true, startedOn: '2026-11-11' }); // reset for testing
+    await a.signIn(); await settle();
+    assert.equal(cloud.count('u1', 'transactions'), 8, 'every payment is still in the account');
+    assert.equal(b.S.transactions.length, 8, 'the other device lost nothing');
+    assert.equal(b.S.settings.name, 'Kezara', 'the name was not wiped');
+    assert.equal(b.S.settings.weeklyBudget, 10000);
+    assert.equal(a.S.transactions.length, 8, 'the reset device got the account back');
+    assert.equal(a.S.settings.name, 'Kezara');
+    assert.equal(a.S.accounts.find((x) => x.name === 'Bank account').initial, 16000);
+    assert.ok(a.S.transactions.every((x) => a.S.categories.some((c) => c.id === x.categoryId)), 'payments keep their categories');
+    assert.equal(a.S.accounts.filter((x) => x.name === 'Cash').length, 1, 'no second set of starter accounts');
+  });
+
+  test('normal deleting of a few records still syncs', async (t) => {
+    const cloud = pretendCloud();
+    const a = device(cloud); const b = device(cloud); t.after(() => { a.close(); b.close(); });
+    fill(a); await a.signIn(); await b.signIn();
+    a.edit((s) => { s.transactions = s.transactions.filter((x) => !['t1', 't2'].includes(x.id)); });
+    await settle();
+    assert.equal(cloud.count('u1', 'transactions'), 6);
+    assert.equal(b.S.transactions.length, 6);
+  });
+
+  test('a wiped account comes back by restoring a backup with Replace on a signed-in device', async (t) => {
+    const cloud = pretendCloud();
+    const a = device(cloud); const b = device(cloud); t.after(() => { a.close(); b.close(); });
+    fill(a); await a.signIn(); await b.signIn();
+    const backup = JSON.parse(JSON.stringify(a.S));
+    a.engine.allowBulkDelete(); a.edit((s) => Object.assign(s, a.L.defaultState())); // the account gets wiped
+    await settle();
+    assert.equal(cloud.count('u1', 'transactions'), 0);
+    b.engine.allowBulkDelete(); b.edit((s) => Object.assign(s, b.L.migrate(JSON.parse(JSON.stringify(backup))))); // Restore → Replace
+    await settle();
+    assert.equal(cloud.count('u1', 'transactions'), 8);
+    for (const d of [a, b]) {
+      assert.equal(d.S.transactions.length, 8);
+      assert.equal(d.S.settings.name, 'Kezara');
+      assert.equal(d.S.accounts.find((x) => x.name === 'Bank account').initial, 16000);
+      assert.ok(d.S.transactions.every((x) => d.S.categories.some((c) => c.id === x.categoryId)));
+      assert.equal(d.S.categories.filter((c) => c.name === 'Food & groceries').length, 1, 'no doubled categories');
+    }
+  });
+
+  test('"Erase all data" while signed in still empties the account (the person asked for it)', async (t) => {
+    const cloud = pretendCloud();
+    const a = device(cloud); const b = device(cloud); t.after(() => { a.close(); b.close(); });
+    fill(a); await a.signIn(); await b.signIn();
+    a.engine.allowBulkDelete();
+    a.edit((s) => { s.transactions = []; });
+    await settle();
+    assert.equal(cloud.count('u1', 'transactions'), 0);
+    assert.equal(b.S.transactions.length, 0);
+  });
+});
+
 describe('sync: reminders (Calendar)', () => {
   test('a reminder added, marked done and deleted on one device shows up on the other', async (t) => {
     const cloud = pretendCloud();
