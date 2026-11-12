@@ -67,8 +67,9 @@ Made by `node tools/store-screenshots.mjs` (sample data, 1080 x 2160).
 - Web version: https://d-keshara.github.io/pocket-ledger/
 - Delete account (Play Console > App content > Data safety > "Delete account URL"): https://d-keshara.github.io/pocket-ledger/account.html?mode=deleteAccount
 
-## What's new in 1.9.10 (release notes, max 500; fixes the settings page that 1.9.9 opened on every start)
+## What's new in 1.9.11 (release notes, max 500; 1.9.10's bundle was built before the last fixes, so this is the full fix)
 Fixed: the app no longer opens phone settings when it starts. Sorry about that!
+Fixed: safer sync between your devices.
 Better: notifications start off. Turn on the ones you want in Settings; the app asks your permission then.
 New: Calendar with bills, payday countdown, goal dates and your own reminders, plus a warning if money may run short.
 New: Pearl colour theme.
