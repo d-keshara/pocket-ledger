@@ -2534,6 +2534,11 @@ function planNotifications(nowMs = now().getTime()) {
 }
 /* Replaces the planned notifications with a fresh plan. Waits a moment so a burst of saves plans only once. */
 let notifyTimer;
+// When each planned notification is due (id -> ms), kept on this device so a re-plan knows which have come.
+const notifyTimes = {
+  get: () => { try { return JSON.parse(localStorage.getItem('pocket-ledger-notify-times') || '{}'); } catch { return {}; } },
+  set: (v) => { try { localStorage.setItem('pocket-ledger-notify-times', JSON.stringify(v)); } catch { /* storage full or blocked */ } },
+};
 function scheduleNotifications() {
   const LN = window.Capacitor?.Plugins?.LocalNotifications;
   if (!isNativeApp() || !LN) return;
@@ -2553,8 +2558,15 @@ function scheduleNotifications() {
       // Planned but no longer needed (an expense was deleted): forget it, so it can still come later this week.
       if (warn) state.settings.notify = { ...notifySettings(), limitWarnAt: toISO(warn.at) };
       else if (notifySettings().limitWarnAt > today()) state.settings.notify = { ...notifySettings(), limitWarnAt: '' };
+      // Android may deliver a planned notification up to about an hour late (no exact alarms), and keeps the ones
+      // already shown in the list. So only cancel those still to come: one whose time has passed is on its way or
+      // in the notification shade, unless the new plan needs its id.
+      const times = notifyTimes.get(), nowMs = now().getTime(), planned = new Set(plan.map((x) => x.id));
       const { notifications: pending = [] } = await LN.getPending();
-      if (pending.length) await LN.cancel({ notifications: pending.map((x) => ({ id: x.id })) });
+      const cancel = pending.filter((x) => !(times[x.id] <= nowMs) || planned.has(x.id));
+      if (cancel.length) await LN.cancel({ notifications: cancel.map((x) => ({ id: x.id })) });
+      const kept = Object.fromEntries(Object.entries(times).filter(([id, at]) => at <= nowMs && !planned.has(+id) && pending.some((x) => x.id === +id)));
+      notifyTimes.set({ ...kept, ...Object.fromEntries(plan.map((x) => [x.id, x.at.getTime()])) });
       // isExactNotification: false, or the plugin opens Android's "Alarms & reminders" page on every start
       // (the app doesn't ask for exact alarms, so it isn't listed there and the page comes back each time).
       if (plan.length) await LN.schedule({ notifications: plan.map((x) => ({ id: x.id, title: x.title, body: x.body, isExactNotification: false, schedule: { at: x.at, allowWhileIdle: true } })) });

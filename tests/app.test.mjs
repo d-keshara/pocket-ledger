@@ -945,6 +945,23 @@ describe('phone notifications (Android app)', () => {
     assert.ok(log.sent?.length && log.sent.every((x) => x.isExactNotification === false));
   });
 
+  test('re-planning keeps a notification whose time has come (Android may deliver it late) and cancels the rest', async (t) => {
+    const { w, L, S, close } = makeApp(); t.after(close); // now: Wed 7 Oct 10:00
+    on(S, { daily: true, dailyTime: '21:00' });
+    const log = phone(w, 'granted'); log.asked = 1;
+    const cancelled = [];
+    w.Capacitor.Plugins.LocalNotifications.cancel = async (o) => { cancelled.push(...o.notifications.map((x) => x.id)); };
+    w.Capacitor.Plugins.LocalNotifications.getPending = async () => ({ notifications: [{ id: 999 }, { id: 101 }] });
+    // 999 was due at 9:30 today and hasn't arrived yet; 101 is tomorrow evening
+    w.localStorage.setItem('pocket-ledger-notify-times', JSON.stringify({ 999: new Date(2026, 9, 7, 9, 30).getTime(), 101: new Date(2026, 9, 8, 21, 0).getTime() }));
+    L.scheduleNotifications();
+    await tick(1300);
+    assert.deepEqual(cancelled, [101], 'only the one still to come is cancelled');
+    const times = JSON.parse(w.localStorage.getItem('pocket-ledger-notify-times'));
+    assert.ok(times[999], 'the late one is still remembered');
+    assert.ok(times[100] && times[106], 'the new plan is remembered');
+  });
+
   test('a reminder’s "Remind me on my phone" box turns on Your reminders after Android allows it', async (t) => {
     for (const answer of ['granted', 'denied']) {
       const { w, L, S, doc, close } = makeApp(); t.after(close);
