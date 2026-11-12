@@ -1876,7 +1876,7 @@ describe('rate the app', () => {
     doc.querySelector('#fbSend').click();
     assert.match(opened, /^mailto:kesharadhananjanaofc@gmail\.com\?subject=Pocket%20Ledger%20problem&body=/);
     const body = decodeURIComponent(opened.split('&body=')[1]);
-    assert.match(body, /^The calendar shows the wrong month & day\n\n--\nPocket Ledger \d+\.\d+\.\d+ \(Windows app, Professional look\)/);
+    assert.match(body, /^The calendar shows the wrong month & day\n\n--\nPocket Ledger \d+\.\d+\.\d+ \(Windows app\)/);
     assert.equal(doc.querySelector('#fbMsg'), null, 'the form closed');
   });
 
@@ -2231,10 +2231,30 @@ describe('reminders', () => {
   });
 });
 
-/* ------------------------------------------ Aesthetic look */
+/* ------------------------------------------ Aesthetic look (on hold: FEATURES.aesthetic is false) */
+describe('Aesthetic on hold', () => {
+  test('no style popup after the welcome form and no Style row in Settings', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    S.settings.onboarded = false; L.render();
+    doc.querySelector('#wGo').click();
+    assert.equal(doc.querySelector('[data-style-pick]'), null);
+    L.ui.view = 'settings'; L.render();
+    assert.equal(doc.querySelector('[data-look]'), null);
+  });
+
+  test('a saved Aesthetic choice shows the Professional look', (t) => {
+    const { L, S, doc, close } = makeApp(); t.after(close);
+    S.settings.style = 'aesthetic'; L.render();
+    assert.equal(doc.documentElement.getAttribute('data-style'), null);
+    assert.equal(doc.querySelector('.wdots'), null, 'the week is bars');
+  });
+});
+
+/* The tests below switch Aesthetic on, so it still works when it comes back. */
+function makeAesApp() { const app = makeApp(); app.L.FEATURES.aesthetic = true; return app; }
 describe('style: Professional or Aesthetic', () => {
   test('new data starts Professional; the page has no style mark', (t) => {
-    const { L, S, doc, close } = makeApp(); t.after(close);
+    const { L, S, doc, close } = makeAesApp(); t.after(close);
     assert.equal(S.settings.style, 'professional');
     L.render();
     assert.equal(doc.documentElement.getAttribute('data-style'), null);
@@ -2242,7 +2262,7 @@ describe('style: Professional or Aesthetic', () => {
   });
 
   test('the welcome form has no style picker; after Start tracking a popup asks for one (Professional recommended)', (t) => {
-    const { L, S, doc, close } = makeApp(); t.after(close);
+    const { L, S, doc, close } = makeAesApp(); t.after(close);
     S.settings.onboarded = false; L.render();
     assert.equal(doc.querySelector('.welcome [data-style-pick]'), null, 'not on the form');
     doc.querySelector('#wName').value = 'Kezara';
@@ -2261,7 +2281,7 @@ describe('style: Professional or Aesthetic', () => {
   });
 
   test('closing the style popup keeps Professional', (t) => {
-    const { L, S, doc, close } = makeApp(); t.after(close);
+    const { L, S, doc, close } = makeAesApp(); t.after(close);
     S.settings.onboarded = false; L.render();
     doc.querySelector('#wGo').click();
     doc.querySelector('.modal [data-close]').click();
@@ -2270,7 +2290,7 @@ describe('style: Professional or Aesthetic', () => {
   });
 
   test('Settings switches the look; a colour theme the person chose is kept', (t) => {
-    const { L, S, doc, close } = makeApp(); t.after(close);
+    const { L, S, doc, close } = makeAesApp(); t.after(close);
     L.ui.view = 'settings'; L.render();
     doc.querySelector('[data-look="aesthetic"]').click();
     assert.equal(S.settings.style, 'aesthetic');
@@ -2283,7 +2303,7 @@ describe('style: Professional or Aesthetic', () => {
   });
 
   test('Aesthetic Home: the week as dots with a plain sentence, quick-action labels', (t) => {
-    const { L, S, doc, add, expenseCat, close } = makeApp(); t.after(close); // Wed 7 Oct; week Mon 5 - Sun 11
+    const { L, S, doc, add, expenseCat, close } = makeAesApp(); t.after(close); // Wed 7 Oct; week Mon 5 - Sun 11
     S.settings.weeklyBudget = 7000; // Rs 1,000 a day
     add({ type: 'expense', amount: 300, date: '2026-10-05', categoryId: expenseCat('Food').id });
     add({ type: 'expense', amount: 2500, date: '2026-10-06', categoryId: expenseCat('Food').id });
@@ -2296,7 +2316,7 @@ describe('style: Professional or Aesthetic', () => {
   });
 
   test('Aesthetic Home as designed: dark card, your week, three quick tiles, recently', (t) => {
-    const { L, S, doc, add, expenseCat, close } = makeApp(); t.after(close); // Wed 7 Oct; week Mon 5 - Sun 11
+    const { L, S, doc, add, expenseCat, close } = makeAesApp(); t.after(close); // Wed 7 Oct; week Mon 5 - Sun 11
     S.settings.weeklyBudget = 7000;
     add({ type: 'expense', amount: 1500, date: '2026-10-05', categoryId: expenseCat('Food').id, note: 'Groceries' });
     L.setStyle('aesthetic'); L.ui.view = 'dashboard'; L.render();
@@ -2316,7 +2336,7 @@ describe('style: Professional or Aesthetic', () => {
   });
 
   test('Home: the name on its own line under the greeting, and the light/dark switch, in both looks', (t) => {
-    const { L, S, doc, close } = makeApp(); t.after(close);
+    const { L, S, doc, close } = makeAesApp(); t.after(close);
     S.settings.name = 'kezara';
     for (const look of ['professional', 'aesthetic']) {
       L.setStyle(look); L.ui.view = 'dashboard'; L.render();
@@ -2326,7 +2346,7 @@ describe('style: Professional or Aesthetic', () => {
   });
 
   test('Home has a Settings button in both looks', (t) => {
-    const { L, doc, close } = makeApp(); t.after(close);
+    const { L, doc, close } = makeAesApp(); t.after(close);
     for (const look of ['professional', 'aesthetic']) {
       L.setStyle(look); L.ui.view = 'dashboard'; L.render();
       doc.querySelector('.home-head [data-go="settings"]').click();
@@ -2335,7 +2355,7 @@ describe('style: Professional or Aesthetic', () => {
   });
 
   test('the menu button on the Aesthetic Home opens every other page, Settings too', (t) => {
-    const { L, doc, close } = makeApp(); t.after(close);
+    const { L, doc, close } = makeAesApp(); t.after(close);
     L.setStyle('aesthetic'); L.render();
     doc.querySelector('#homeMenu').click();
     const more = [...doc.querySelectorAll('.more-list [data-nav]')].map((b) => b.dataset.nav);
@@ -2345,21 +2365,21 @@ describe('style: Professional or Aesthetic', () => {
   });
 
   test('category icons: by name in the add form and the lists, three dots for unknown names', (t) => {
-    const { L, close } = makeApp(); t.after(close);
+    const { L, close } = makeAesApp(); t.after(close);
     assert.match(L.catIcon('Food & groceries'), /M3 10h18/);
     assert.match(L.catIcon('Rent & housing'), /M3 10\.5 12 3/);
     assert.match(L.catIcon('My own thing'), /M5 12h\.01/);
   });
 
   test('Aesthetic Home without a limit counts no-spend days', (t) => {
-    const { L, doc, add, expenseCat, close } = makeApp(); t.after(close);
+    const { L, doc, add, expenseCat, close } = makeAesApp(); t.after(close);
     add({ type: 'expense', amount: 300, date: '2026-10-05', categoryId: expenseCat('Food').id });
     L.setStyle('aesthetic'); L.render();
     assert.match(doc.querySelector('.wdots-note').textContent, /1 no-spend day so far/);
   });
 
   test('Aesthetic Reports: no charts, a plain sentence instead', (t) => {
-    const { L, doc, add, expenseCat, incomeCat, close } = makeApp(); t.after(close);
+    const { L, doc, add, expenseCat, incomeCat, close } = makeAesApp(); t.after(close);
     add({ type: 'income', amount: 10000, date: '2026-10-01', categoryId: incomeCat().id });
     add({ type: 'expense', amount: 3000, date: '2026-10-02', categoryId: expenseCat('Food').id });
     add({ type: 'expense', amount: 1000, date: '2026-10-03', categoryId: expenseCat('Transport').id });
@@ -2377,7 +2397,7 @@ describe('style: Professional or Aesthetic', () => {
   });
 
   test('the look is per device: it never syncs', (t) => {
-    const { close } = makeApp(); t.after(close);
+    const { close } = makeAesApp(); t.after(close);
     const core = fs.readFileSync(new URL('../web/sync-core.js', import.meta.url), 'utf8');
     assert.match(core, /LOCAL_SETTINGS = \[[^\]]*'style'/);
   });
@@ -2385,7 +2405,7 @@ describe('style: Professional or Aesthetic', () => {
 
 describe('Aesthetic look: the tab bar and the ring chart', () => {
   test('the phone bar holds Home, Calendar, +, Spending and Goals (styles.css shows them in that order)', (t) => {
-    const { L, doc, close } = makeApp(); t.after(close);
+    const { L, doc, close } = makeAesApp(); t.after(close);
     L.setStyle('aesthetic'); L.render();
     const shown = [...doc.querySelectorAll('.nav > button:not(.phone-hide):not(.more-btn)')].map((b) => b.id === 'navAdd' ? '+' : b.textContent.trim());
     assert.deepEqual(shown.sort(), ['+', 'Calendar', 'Goals', 'Home', 'Spending']);
@@ -2394,7 +2414,7 @@ describe('Aesthetic look: the tab bar and the ring chart', () => {
   });
 
   test('Aesthetic Goals: big cards with a % and a friendly tip, and a dashed "Start a new goal"', (t) => {
-    const { L, S, doc, close } = makeApp(); t.after(close);
+    const { L, S, doc, close } = makeAesApp(); t.after(close);
     S.goals.push({ id: 'g1', name: 'New laptop', target: 90000, saved: 20000, deadline: '2026-12-30' });
     S.goals.push({ id: 'g2', name: 'Trip', target: 10000, saved: 8000 });
     L.setStyle('aesthetic'); L.ui.view = 'goals'; L.render();
@@ -2406,7 +2426,7 @@ describe('Aesthetic look: the tab bar and the ring chart', () => {
   });
 
   test('Aesthetic Settings: Style as two big rows', (t) => {
-    const { L, S, doc, close } = makeApp(); t.after(close);
+    const { L, S, doc, close } = makeAesApp(); t.after(close);
     L.setStyle('aesthetic'); L.ui.view = 'settings'; L.render();
     const rows = doc.querySelectorAll('.look-row');
     assert.equal(rows.length, 2);
@@ -2419,7 +2439,7 @@ describe('Aesthetic look: the tab bar and the ring chart', () => {
   });
 
   test('the + in the bar opens the quick actions and closes them again', (t) => {
-    const { L, doc, close } = makeApp(); t.after(close);
+    const { L, doc, close } = makeAesApp(); t.after(close);
     L.setStyle('aesthetic'); L.render();
     const add = doc.querySelector('#navAdd');
     add.click();
@@ -2430,7 +2450,7 @@ describe('Aesthetic look: the tab bar and the ring chart', () => {
   });
 
   test('Professional keeps its own bar and has no + in it', (t) => {
-    const { L, doc, close } = makeApp(); t.after(close);
+    const { L, doc, close } = makeAesApp(); t.after(close);
     L.render();
     assert.equal(doc.querySelector('#navAdd'), null);
     const shown = [...doc.querySelectorAll('.nav > button:not(.phone-hide)')].map((b) => b.textContent.trim());
@@ -2438,7 +2458,7 @@ describe('Aesthetic look: the tab bar and the ring chart', () => {
   });
 
   test('Spending shows a ring: 5 biggest categories plus "Everything else", each a different colour', (t) => {
-    const { L, S, doc, add, close } = makeApp(); t.after(close);
+    const { L, S, doc, add, close } = makeAesApp(); t.after(close);
     const cats = S.categories.filter((c) => c.type === 'expense');
     [5000, 3000, 2000, 1000, 600, 300, 100].forEach((v, i) => add({ type: 'expense', amount: v, date: '2026-10-02', categoryId: cats[i].id }));
     L.setStyle('aesthetic'); L.ui.view = 'reports'; L.ui.reportPeriod = 'month'; L.render();
@@ -2452,7 +2472,7 @@ describe('Aesthetic look: the tab bar and the ring chart', () => {
   });
 
   test('one category fills the whole ring', (t) => {
-    const { L, doc, add, expenseCat, close } = makeApp(); t.after(close);
+    const { L, doc, add, expenseCat, close } = makeAesApp(); t.after(close);
     add({ type: 'expense', amount: 500, date: '2026-10-02', categoryId: expenseCat('Rent').id });
     L.setStyle('aesthetic'); L.ui.view = 'reports'; L.ui.reportPeriod = 'month'; L.render();
     const arc = doc.querySelector('.donut circle');

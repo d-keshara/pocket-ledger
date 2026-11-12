@@ -3,7 +3,7 @@
 'use strict';
 
 /* ================= constants ================= */
-const APP_VERSION = '1.9.8';
+const APP_VERSION = '1.9.9';
 const AUTHOR = 'D. Kezara';
 const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948', '#5f6b66', '#0f6b5c'];
 const CURRENCIES = [
@@ -1878,7 +1878,7 @@ function viewSettings() {
         ${row('Week starts on', seg('data-week', s.weekStart, [[1, 'Mon'], [0, 'Sun'], [6, 'Sat']]))}
       </div></section>
       <section class="set-group"><h2 class="set-title">Appearance</h2><div class="set-card">
-        <div class="set-row set-col"><div class="set-label"><b>Style</b></div><div class="look-rows" role="radiogroup" aria-label="Style">${STYLES.map(([v, l, d, rec]) => `<button type="button" role="radio" class="look-row look-${v} ${(s.style || 'professional') === v ? 'on' : ''}" aria-checked="${(s.style || 'professional') === v}" data-look="${v}"><span class="look-aa">Aa</span><span class="look-txt"><b>${l}${rec ? ' <span class="rec-badge">Recommended</span>' : ''}</b><small>${d}</small></span><i class="look-radio"></i></button>`).join('')}</div></div>
+        ${FEATURES.aesthetic ? `<div class="set-row set-col"><div class="set-label"><b>Style</b></div><div class="look-rows" role="radiogroup" aria-label="Style">${STYLES.map(([v, l, d, rec]) => `<button type="button" role="radio" class="look-row look-${v} ${(s.style || 'professional') === v ? 'on' : ''}" aria-checked="${(s.style || 'professional') === v}" data-look="${v}"><span class="look-aa">Aa</span><span class="look-txt"><b>${l}${rec ? ' <span class="rec-badge">Recommended</span>' : ''}</b><small>${d}</small></span><i class="look-radio"></i></button>`).join('')}</div></div>` : ''}
         ${row('Mode', seg('data-mode', s.theme, [['system', isNativeApp() ? 'Phone' : 'Auto'], ['light', 'Light'], ['dark', 'Dark']]), s.theme === 'system' ? systemLabel() : '')}
         <div class="set-row set-col"><div class="set-label"><b>Colour theme</b></div>
           <div class="palettes" role="radiogroup" aria-label="Colour theme">${PALETTES.map(([v, l]) => `<button type="button" role="radio" aria-checked="${(s.palette || 'forest') === v}" class="pal pal-${v}" data-pal="${v}"><i aria-hidden="true"></i><span>${l}</span></button>`).join('')}</div></div>
@@ -2224,7 +2224,10 @@ const STYLES = [
   ['professional', 'Professional', 'A simple, professional look. Clear and easy to read every day.', true],
   ['aesthetic', 'Aesthetic', 'A soft, pretty look, like a planner. Handwritten titles and pastel colours.', false],
 ];
-const aesthetic = () => state?.settings.style === 'aesthetic';
+/* Aesthetic is on hold (2026-11-12): kept in the code, but nobody can pick it and a saved 'aesthetic' shows
+   Professional. Set to true to bring it back (the welcome popup and the Style row in Settings come back too). */
+const FEATURES = { aesthetic: false };
+const aesthetic = () => FEATURES.aesthetic && state?.settings.style === 'aesthetic';
 /* Choosing a look also picks its colours, unless the person chose another colour theme themselves. */
 function setStyle(style) {
   const s = state.settings; s.style = style;
@@ -2280,7 +2283,7 @@ function bindWelcome() {
     // the real one. Don't write this form's name, limit and starting balances over the synced accounts.
     if (state !== shown || state.settings.onboarded) {
       state.settings.onboarded = true; save(); render(); toast('Your data from your account is loaded');
-      styleChooser(firstRunNotifications);
+      afterWelcome();
       return;
     }
     const s = state.settings; const cur = $('#wCur').value;
@@ -2290,12 +2293,14 @@ function bindWelcome() {
     state.accounts[0].initial = round2(parseFloat($('#wCash').value) || 0);
     if (state.accounts[1]) state.accounts[1].initial = round2(parseFloat($('#wBank').value) || 0);
     save(); render();
-    styleChooser(firstRunNotifications);
+    afterWelcome();
   };
   const signIn = $('#wSignIn'); if (signIn) signIn.onclick = () => accountForm('signin');
   const signUp = $('#wSignUp'); if (signUp) signUp.onclick = () => accountForm('signup');
   $('#wName').focus();
 }
+/* After the welcome form: the style popup (while Aesthetic is on), then the notification question. */
+function afterWelcome() { if (FEATURES.aesthetic) styleChooser(firstRunNotifications); else firstRunNotifications(); }
 /* Right after the welcome form: pick a look. Tapping a card applies it and closes; closing keeps Professional.
    `then` runs once it's closed (the phone's notification question), so the two never show at the same time. */
 function styleChooser(then = () => {}) {
@@ -2635,7 +2640,7 @@ const FEEDBACK_KINDS = [
 function feedbackMail(kind, message) {
   const label = (FEEDBACK_KINDS.find(([k]) => k === kind) || FEEDBACK_KINDS[2])[1];
   const where = isNativeApp() ? 'Android app' : hasApi() ? 'Windows app' : 'web';
-  const body = `${message}\n\n--\nPocket Ledger ${APP_VERSION} (${where}, ${aesthetic() ? 'Aesthetic' : 'Professional'} look)\n${navigator.userAgent}`;
+  const body = `${message}\n\n--\nPocket Ledger ${APP_VERSION} (${where})\n${navigator.userAgent}`;
   return `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(`Pocket Ledger ${label.toLowerCase()}`)}&body=${encodeURIComponent(body)}`;
 }
 /* Phone and browser: going to a mailto: link hands it to the email app. Windows app: main.py opens it. */
@@ -2820,7 +2825,7 @@ if (window.__LEDGER_TEST__) {
     weekInfo, accountBalance, totalBalance, postDueRecurring, nextOccurrence, budgetStatus, filteredTx,
     periodRange, categoryRows, deleteTx, goalEffect, txForm, niceMax, plural, showUpdateBanner, checkPlayUpdate, versionFromCode, drawBarChart, fabOnScroll, planNotifications, notifyPanel,
     calcEval, toolMath, calcPad, settleCalc,
-    cloudPanel, accountForm, confirmMerge, syncLine, onCloudChange, renderSoon, backupDue, saveBackup, snoozeBackup, reviewDue, askForReview, firstRunNotifications, openPlayPage, setStyle, weekDots, reportSentence, donutChart, phoneBar, catIcon, viewHomeAes, greetingHtml, styleChooser, feedbackForm, feedbackMail, FEEDBACK_EMAIL, viewCalendar, openCalendar, calEvents, calDayMarks, calAmt, forecast, firstShortDay, nextPayday, dailySpend, reminderForm, remAmount, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
+    cloudPanel, accountForm, confirmMerge, syncLine, onCloudChange, renderSoon, backupDue, saveBackup, snoozeBackup, reviewDue, askForReview, firstRunNotifications, openPlayPage, FEATURES, afterWelcome, setStyle, weekDots, reportSentence, donutChart, phoneBar, catIcon, viewHomeAes, greetingHtml, styleChooser, feedbackForm, feedbackMail, FEEDBACK_EMAIL, viewCalendar, openCalendar, calEvents, calDayMarks, calAmt, forecast, firstShortDay, nextPayday, dailySpend, reminderForm, remAmount, lastBackupText, hideTip, TIP_TOUCH_MS, hideSplash, SPLASH_MIN_MS,
   };
 } else {
   let booted = false;

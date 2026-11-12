@@ -25,7 +25,6 @@ WHAT YOU CAN DO
 • See reports: income vs. expenses by month, spending by category, your biggest expenses and your savings rate
 • Search and filter every transaction by date, type, category or account
 • Built-in calculator: type sums like 1200+350 in any amount, or work out discounts, bill splits, loan payments and how much to save each week
-• Two styles: Professional, simple and clear, or Aesthetic, a soft, colourful planner look with handwritten titles and an easy circle chart of your spending
 • Choose your currency (LKR, USD, EUR, GBP, INR, AUD and many more), your first day of the week, light or dark mode, and a colour theme: Forest, Onyx, Navy, Mocha or Pearl
 • Send ideas or report a problem right from Settings
 • Optional sync: create a free account to use the same data on your phone and computer, updated live
@@ -52,7 +51,7 @@ Designed and developed by D. Kezara.
 Made by `node tools/store-screenshots.mjs` (sample data, 1080 x 2160).
 1. screenshots/1-this-week.png
 2. screenshots/2-calendar.png
-3. screenshots/3-aesthetic-home.png
+3. screenshots/3-budgets.png
 4. screenshots/4-spending-chart.png
 5. screenshots/5-add-expense.png
 6. screenshots/6-savings-goals.png
@@ -68,9 +67,8 @@ Made by `node tools/store-screenshots.mjs` (sample data, 1080 x 2160).
 - Web version: https://d-keshara.github.io/pocket-ledger/
 - Delete account (Play Console > App content > Data safety > "Delete account URL"): https://d-keshara.github.io/pocket-ledger/account.html?mode=deleteAccount
 
-## What's new in 1.9.8 (release notes, max 500; 1.9.6 and 1.9.7 never went to Play, so these cover all three)
+## What's new in 1.9.9 (release notes, max 500; 1.9.6 to 1.9.8 never went to Play, so these cover them all)
 New: Calendar page with your bills, payday countdown, goal dates and your own reminders, with a warning if money may run short.
-New: Aesthetic style, a soft, colourful planner look with a spending circle chart. Choose it in Settings → Style.
 New: send an idea or report a problem from Settings → Feedback.
 Better: reminders are on for new installs, and Settings is one tap away on the home page.
 

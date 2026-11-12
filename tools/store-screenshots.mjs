@@ -72,14 +72,13 @@ const DEMO = `
 const SHOTS = [
   ['1-this-week.png', `L.render();`],
   ['2-calendar.png', `L.openCalendar();`],
-  ['3-aesthetic-home.png', `L.setStyle('aesthetic'); L.render();`],
-  ['4-spending-chart.png', `L.setStyle('aesthetic'); L.ui.view = 'reports'; L.ui.reportPeriod = 'month'; L.render();
-    const m = document.querySelector('.main'); m.scrollTop = document.querySelector('.hero').offsetTop - 16;`],
-  ['5-add-expense.png', `L.setStyle('aesthetic'); L.render(); document.querySelector('.qa-tile[data-fab="expense"]').click();
+  ['3-budgets.png', `L.ui.view = 'budgets'; L.render();`],
+  ['4-spending-chart.png', `L.ui.view = 'reports'; L.ui.reportPeriod = 'month'; L.render();`],
+  ['5-add-expense.png', `L.render(); L.txForm({ type: 'expense' });
     const a = document.querySelector('#fAmount'); a.value = '1250'; a.blur(); document.querySelector('#fCats .chip').click();
     document.querySelector('#fNote').value = 'Groceries for the week';`],
-  ['6-savings-goals.png', `L.setStyle('aesthetic'); L.ui.view = 'goals'; L.render();`],
-  ['7-dark-mode.png', `L.state.settings.theme = 'dark'; L.setStyle('aesthetic'); L.openCalendar();`],
+  ['6-savings-goals.png', `L.ui.view = 'goals'; L.render();`],
+  ['7-dark-mode.png', `L.state.settings.theme = 'dark'; L.setStyle('professional'); L.openCalendar();`],
   ['8-transactions.png', `L.ui.view = 'transactions'; L.render();`],
 ];
 
