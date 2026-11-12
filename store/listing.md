@@ -68,9 +68,12 @@ Made by `node tools/store-screenshots.mjs` (sample data, 1080 x 2160).
 - Delete account (Play Console > App content > Data safety > "Delete account URL"): https://d-keshara.github.io/pocket-ledger/account.html?mode=deleteAccount
 
 ## What's new in 1.9.9 (release notes, max 500; 1.9.6 to 1.9.8 never went to Play, so these cover them all)
-New: Calendar page with your bills, payday countdown, goal dates and your own reminders, with a warning if money may run short.
-New: send an idea or report a problem from Settings → Feedback.
-Better: reminders are on for new installs, and Settings is one tap away on the home page.
+New: Calendar with your bills, payday countdown, goal dates and your own reminders, plus a warning if money may run short.
+New: Pearl colour theme in Settings → Appearance.
+New: send an idea or report a problem from Settings → Feedback, or rate us on Google Play.
+New: create your free account right from the welcome screen.
+Better: steadier add form, a cleaner home page, Settings one tap away, and reminders on for new installs.
+Fixed: layout on computers and big screens.
 
 ## What's new in 1.9.5, kept for reference (release notes, max 500)
 New: the home page now shows how much went on fixed costs like bills, which don't count toward your weekly limit.
